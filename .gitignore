@@ -1,0 +1,26 @@
+# Docker volumes and runtime
+postgres_data/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment variables (we'll use this later)
+.env
+
+# OS
+.DS_Store
+Thumbs.db
