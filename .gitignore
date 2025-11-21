@@ -2,15 +2,17 @@
 postgres_data/
 *.log
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-env/
-.venv
+# Scala/sbt
+target/
+project/target/
+project/project/
+*.class
+*.jar
+*.war
+.bsp/
+.metals/
+.bloop/
+metals.sbt
 
 # IDE
 .vscode/
@@ -18,9 +20,21 @@ env/
 *.swp
 *.swo
 
-# Environment variables (we'll use this later)
+# Environment variables
 .env
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Docker volumes
+postgres_data/
+kafka_data/
+zookeeper_data/
+zookeeper_log/
+*.log
+
+# Config (keep templates, ignore local overrides)
+config/prometheus_data/
+config/grafana_data/
+config/loki_data/
