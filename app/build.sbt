@@ -22,5 +22,11 @@ libraryDependencies ++= Seq(
   "net.debasishg" %% "redisclient" % "3.42",
   
   // PureConfig for type-safe configuration
-  "com.github.pureconfig" %% "pureconfig" % "0.17.4"
+  "com.github.pureconfig" %% "pureconfig" % "0.17.4",
+  
+  // Testing
+  "org.scalatest" %% "scalatest" % "3.2.17" % Test,
+  "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.41.0" % Test,
+  "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.41.0" % Test,
+  "com.dimafeng" %% "testcontainers-scala-kafka" % "0.41.0" % Test
 )
