@@ -30,5 +30,9 @@ libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.2.17" % Test,
   "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.41.0" % Test,
   "com.dimafeng" %% "testcontainers-scala-postgresql" % "0.41.0" % Test,
-  "com.dimafeng" %% "testcontainers-scala-kafka" % "0.41.0" % Test
+  "com.dimafeng" %% "testcontainers-scala-kafka" % "0.41.0" % Test,
+
+  // HTTP client for SafetyCulture API
+  "com.softwaremill.sttp.client3" %% "core" % "3.9.1",
+  "com.softwaremill.sttp.client3" %% "circe" % "3.9.1"
 )

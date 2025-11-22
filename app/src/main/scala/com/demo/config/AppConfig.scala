@@ -10,7 +10,8 @@ case class AppConfig(
   redis: RedisConfig,
   smtp: SmtpConfig,
   apiPoller: ApiPollerConfig,
-  notificationService: NotificationServiceConfig
+  notificationService: NotificationServiceConfig,
+  safetyculture: SafetyCultureConfig
 )
 
 case class AppSettings(
@@ -99,4 +100,11 @@ case class NotificationServiceConfig(
 case class RateLimitConfig(
   enabled: Boolean,
   maxPerMinute: Int
+)
+
+case class SafetyCultureConfig(
+  apiUrl: String,
+  apiToken: String,
+  pollInterval: Int,
+  pageSize: Int
 )
