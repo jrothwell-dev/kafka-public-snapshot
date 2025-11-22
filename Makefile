@@ -4,90 +4,115 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-export DOCKER_BUILDKIT=0
+export DOCKER_BUILDKIT=1
 
-.PHONY: help up down clean status services logs seed topics
+.PHONY: help up down clean status services logs seed topics reset
 
-# Default target
 help:
-	@echo "Kafka Pipeline Commands:"
-	@echo ""
-	@echo "  make up          - Start infrastructure (Kafka, Redis, Postgres, monitoring)"
-	@echo "  make down        - Stop everything"
-	@echo "  make clean       - Remove everything including volumes (DESTRUCTIVE)"
-	@echo ""
-	@echo "  make services    - Build and start all services"
-	@echo "  make status      - Show pipeline status"
-	@echo "  make logs        - Show all logs (centralized)"
-	@echo ""
-	@echo "  make topics      - Create Kafka topics"
-	@echo "  make seed        - Seed required users"
+	@echo "Council Kafka Platform Commands:"
+	@echo "  make up       - Start infrastructure"
+	@echo "  make down     - Stop everything"
+	@echo "  make reset    - Clean restart"
+	@echo "  make services - Build/start microservices"
+	@echo "  make status   - Show status"
+	@echo "  make seed     - Seed test data"
 
-# Infrastructure
 up:
-	docker-compose up -d
-	@echo "Waiting for Kafka to be ready..."
+	@docker-compose up -d
 	@sleep 10
-	make topics
+	@make topics
 
 down:
-	docker-compose -f docker-compose.services.yml down 2>/dev/null || true
-	docker-compose down
+	@docker-compose -f docker-compose.services.yml down 2>/dev/null || true
+	@docker-compose down
+
+reset: down clean up
 
 clean:
-	docker-compose -f docker-compose.services.yml down -v 2>/dev/null || true
-	docker-compose down -v
+	@docker-compose -f docker-compose.services.yml down -v 2>/dev/null || true
+	@docker-compose down -v
 
-# Topics setup
+# Create topics only if they don't exist (suppress warnings)
 topics:
-	@docker exec kafka kafka-topics --create --topic raw-safetyculture-users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic raw-safetyculture-credentials --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic processed-wwcc-status --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic events-compliance-issues --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic events-notifications-sent --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic commands-notifications --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@docker exec kafka kafka-topics --create --topic required-wwcc-users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
-	@echo "✓ Topics ready"
+	@docker exec kafka sh -c ' \
+		for topic in \
+			"reference.wwcc.required:1:1" \
+			"raw.safetyculture.users:1:1" \
+			"raw.safetyculture.credentials:1:1" \
+			"processed.wwcc.status:3:1" \
+			"events.compliance.issues:3:1" \
+			"events.notifications.sent:3:1" \
+			"commands.notifications:5:1"; do \
+			IFS=":" read -r name partitions replication <<< "$$topic"; \
+			kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null | grep -q "^$$name$$" || \
+			kafka-topics --create --topic $$name --partitions $$partitions --replication-factor $$replication \
+				--bootstrap-server localhost:9092 >/dev/null 2>&1; \
+		done'
+	@echo "Topics ready"
 
-# Services
+list-topics:
+	@docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | sort
+
+cleanup-old-topics:
+	@docker exec kafka sh -c ' \
+		for topic in \
+			"raw-safetyculture-users" \
+			"raw-safetyculture-credentials" \
+			"processed-wwcc-status" \
+			"events-compliance-issues" \
+			"events-notifications-sent" \
+			"commands-notifications" \
+			"required-wwcc-users"; do \
+			kafka-topics --delete --topic $$topic --bootstrap-server localhost:9092 2>/dev/null || true; \
+		done'
+
 services:
-	@if [ -z "${SAFETYCULTURE_API_TOKEN}" ]; then \
-		echo "ERROR: SAFETYCULTURE_API_TOKEN not set in .env"; \
-		exit 1; \
-	fi
-	docker-compose -f docker-compose.services.yml build
-	docker-compose -f docker-compose.services.yml up -d
-	@echo "✓ Services started"
+	@[ -n "${SAFETYCULTURE_API_TOKEN}" ] || (echo "ERROR: SAFETYCULTURE_API_TOKEN not set"; exit 1)
+	@docker-compose -f docker-compose.services.yml build
+	@docker-compose -f docker-compose.services.yml up -d
 
-# Centralized logging
+sc-poller-build:
+	@docker-compose -f docker-compose.services.yml build sc-poller
+
+sc-poller-up:
+	@docker-compose -f docker-compose.services.yml up -d sc-poller
+
+sc-poller-logs:
+	@docker-compose -f docker-compose.services.yml logs -f sc-poller
+
 logs:
-	docker-compose -f docker-compose.services.yml logs -f --tail=50
+	@docker-compose -f docker-compose.services.yml logs -f --tail=50
 
-# Seed data
 seed:
-	@echo '{"email":"jordanr@murrumbidgee.nsw.gov.au","department":"IT Services","requires_wwcc":true}' | \
-		docker exec -i kafka kafka-console-producer --topic required-wwcc-users --bootstrap-server localhost:9092
-	@echo "✓ Seeded required users"
+	@echo '{"email":"jordanr@murrumbidgee.nsw.gov.au","department":"IT Services","position":"Systems Administrator","requiresWwcc":true,"startDate":"2024-01-15"}' | \
+		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
+	@echo '{"email":"sarah.mitchell@murrumbidgee.nsw.gov.au","department":"Community Services","position":"Youth Worker","requiresWwcc":true,"startDate":"2024-03-01"}' | \
+		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
+	@echo '{"email":"james.peterson@murrumbidgee.nsw.gov.au","department":"Youth Programs","position":"Program Coordinator","requiresWwcc":true,"startDate":"2025-12-01"}' | \
+		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
+	@echo '{"email":"emily.rodriguez@murrumbidgee.nsw.gov.au","department":"Recreation Services","position":"Sports Coach","requiresWwcc":true,"startDate":"2026-01-15"}' | \
+		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
 
-# Status dashboard
 status:
-	@clear
-	@echo "╔════════════════════════════════════════════════════════════╗"
-	@echo "║                  KAFKA PIPELINE STATUS                        ║"
-	@echo "╚════════════════════════════════════════════════════════════╝"
-	@echo ""
 	@echo "Infrastructure:"
-	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka|redis|postgres|traefik)" | head -10 || true
-	@echo ""
-	@echo "Services:"
-	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(sc-poller|wwcc-transformer|compliance)" || echo "  No services running yet"
-	@echo ""
-	@echo "Dashboards:"
-	@echo "  • Kafka UI: http://kafka-ui.localhost"
-	@echo "  • Grafana:  http://grafana.localhost (admin/admin)"
-	@echo "    Query: {container=~\"sc-poller.*\"} for logs"
-	@echo "  • Traefik:  http://localhost:8081"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka|redis|postgres)" | head -5
+	@echo "\nServices:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(sc-poller|transformer|compliance)" || echo "None running"
+	@echo "\nDashboards:"
+	@echo "Kafka UI:   http://localhost:8081"
+	@echo "Grafana:    http://localhost:3000"
+	@echo "Traefik:    http://localhost:8080"
+	@echo "Prometheus: http://localhost:9090"
 
-# Development helpers (hidden from help)
 watch-%:
-	docker exec -it kafka kafka-console-consumer --topic $* --from-beginning --bootstrap-server localhost:9092
+	@docker exec -it kafka kafka-console-consumer \
+		--topic $* \
+		--from-beginning \
+		--bootstrap-server localhost:9092 \
+		--property print.timestamp=true \
+		--property print.key=true
+
+health:
+	@docker exec kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 && echo "Kafka: ✅" || echo "Kafka: ❌"
+	@docker exec postgres pg_isready > /dev/null 2>&1 && echo "PostgreSQL: ✅" || echo "PostgreSQL: ❌"
+	@docker exec redis redis-cli ping > /dev/null 2>&1 && echo "Redis: ✅" || echo "Redis: ❌"
