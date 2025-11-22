@@ -4,142 +4,90 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
-.PHONY: help up down restart logs clean build run test email
+export DOCKER_BUILDKIT=0
+
+.PHONY: help up down clean status services logs seed topics
 
 # Default target
 help:
-	@echo "Available commands:"
+	@echo "Kafka Pipeline Commands:"
 	@echo ""
-	@echo "Docker Operations:"
-	@echo "  make up              - Start all containers"
-	@echo "  make down            - Stop all containers"
-	@echo "  make restart         - Restart all containers"
-	@echo "  make logs            - Follow logs from all containers"
-	@echo "  make clean           - Remove all containers and volumes (DESTRUCTIVE)"
+	@echo "  make up          - Start infrastructure (Kafka, Redis, Postgres, monitoring)"
+	@echo "  make down        - Stop everything"
+	@echo "  make clean       - Remove everything including volumes (DESTRUCTIVE)"
 	@echo ""
-	@echo "Application:"
-	@echo "  make build           - Build the Scala application"
-	@echo "  make run             - Run the database poller"
-	@echo "  make test            - Run tests"
-	@echo "  make migrate         - Run database migrations"
+	@echo "  make services    - Build and start all services"
+	@echo "  make status      - Show pipeline status"
+	@echo "  make logs        - Show all logs (centralized)"
 	@echo ""
-	@echo "Email Testing:"
-	@echo "  make email TEMPLATE=test-email.txt              - Send specific email template"
-	@echo "  make email TEMPLATE=test-email-html.html        - Send HTML template"
-	@echo "  make email TEMPLATE=compliance-alert.txt        - Send compliance alert"
-	@echo ""
-	@echo "Kafka Operations:"
-	@echo "  make kafka-topics    - List all Kafka topics"
-	@echo "  make kafka-create    - Create default topics"
-	@echo "  make kafka-consume   - Consume from user-events topic"
-	@echo ""
-	@echo "Database:"
-	@echo "  make db-shell        - Open PostgreSQL shell"
-	@echo ""
-	@echo "Monitoring:"
-	@echo "  make urls            - Show all service URLs"
+	@echo "  make topics      - Create Kafka topics"
+	@echo "  make seed        - Seed required users"
 
-# Docker operations
+# Infrastructure
 up:
 	docker-compose up -d
+	@echo "Waiting for Kafka to be ready..."
+	@sleep 10
+	make topics
 
 down:
+	docker-compose -f docker-compose.services.yml down 2>/dev/null || true
 	docker-compose down
 
-restart:
-	docker-compose restart
-
-logs:
-	docker-compose logs -f
-
 clean:
+	docker-compose -f docker-compose.services.yml down -v 2>/dev/null || true
 	docker-compose down -v
-	cd app && sbt clean
 
-# Application operations
-build:
-	cd app && sbt compile
+# Topics setup
+topics:
+	@docker exec kafka kafka-topics --create --topic raw-safetyculture-users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic raw-safetyculture-credentials --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic processed-wwcc-status --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic events-compliance-issues --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic events-notifications-sent --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic commands-notifications --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@docker exec kafka kafka-topics --create --topic required-wwcc-users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists 2>/dev/null || true
+	@echo "✓ Topics ready"
 
-run:
-	cd app && sbt run
+# Services
+services:
+	@if [ -z "${SAFETYCULTURE_API_TOKEN}" ]; then \
+		echo "ERROR: SAFETYCULTURE_API_TOKEN not set in .env"; \
+		exit 1; \
+	fi
+	docker-compose -f docker-compose.services.yml build
+	docker-compose -f docker-compose.services.yml up -d
+	@echo "✓ Services started"
 
-test:
-	cd app && sbt test
+# Centralized logging
+logs:
+	docker-compose -f docker-compose.services.yml logs -f --tail=50
 
-migrate:
-	cd app && sbt "runMain com.demo.MigrationRunner"
+# Seed data
+seed:
+	@echo '{"email":"jordanr@murrumbidgee.nsw.gov.au","department":"IT Services","requires_wwcc":true}' | \
+		docker exec -i kafka kafka-console-producer --topic required-wwcc-users --bootstrap-server localhost:9092
+	@echo "✓ Seeded required users"
 
-# Email operations
-email:
-ifndef TEMPLATE
-	@echo "Error: TEMPLATE not specified"
-	@echo "Usage: make email TEMPLATE=test-email.txt"
+# Status dashboard
+status:
+	@clear
+	@echo "╔════════════════════════════════════════════════════════════╗"
+	@echo "║                  KAFKA PIPELINE STATUS                        ║"
+	@echo "╚════════════════════════════════════════════════════════════╝"
 	@echo ""
-	@echo "Available templates:"
-	@ls app/src/main/resources/email-templates/ | sed 's/^/  /'
-	@exit 1
-endif
-	cd app && sbt "runMain com.demo.SendEmail $(TEMPLATE)"
-
-# Kafka operations
-kafka-topics:
-	docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
-
-kafka-create:
-	docker exec -it kafka kafka-topics --create --topic raw.safetyculture.users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic raw.safetyculture.credentials --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic processed.wwcc.status --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic events.compliance.issues --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic events.notifications.sent --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic commands.notifications --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic commands.poll.safetyculture --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	@echo "Infrastructure:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(kafka|redis|postgres|traefik)" | head -10 || true
 	@echo ""
-	@echo "Created ETL topics:"
-	@docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092 | sort
-
-
-kafka-consume:
-	docker exec -it kafka kafka-console-consumer --topic user-events --from-beginning --bootstrap-server localhost:9092
-
-# Database operations
-db-shell:
-	docker exec -it postgres psql -U demo -d demodata
-
-# Utility
-urls:
-	@echo "Service URLs (ensure ports are forwarded in VS Code):"
+	@echo "Services:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "(sc-poller|wwcc-transformer|compliance)" || echo "  No services running yet"
 	@echo ""
-	@echo "  Traefik Dashboard:  http://localhost:8081"
-	@echo "  Kafka UI:           http://kafka-ui.localhost"
-	@echo "  Prometheus:         http://prometheus.localhost"
-	@echo "  Grafana:            http://grafana.localhost (admin/admin)"
-	@echo ""
+	@echo "Dashboards:"
+	@echo "  • Kafka UI: http://kafka-ui.localhost"
+	@echo "  • Grafana:  http://grafana.localhost (admin/admin)"
+	@echo "    Query: {container=~\"sc-poller.*\"} for logs"
+	@echo "  • Traefik:  http://localhost:8081"
 
-# Service-specific testing
-sc-poller-build:
-	cd services/sc-poller && sbt compile
-
-sc-poller-local:
-	cd services/sc-poller && \
-	SAFETYCULTURE_API_TOKEN=$${SAFETYCULTURE_API_TOKEN} \
-	KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
-	POLL_INTERVAL=30 \
-	sbt run
-
-sc-poller-docker-build:
-	docker build -t sc-poller:latest services/sc-poller/
-
-sc-poller-docker-run:
-	docker run --rm \
-	--network kafka-network \
-	-e SAFETYCULTURE_API_TOKEN=$${SAFETYCULTURE_API_TOKEN} \
-	-e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 \
-	-e POLL_INTERVAL=30 \
-	sc-poller:latest
-
-# Watch Kafka topics
-watch-raw-users:
-	docker exec -it kafka kafka-console-consumer --topic raw.safetyculture.users --from-beginning --bootstrap-server localhost:9092
-
-watch-raw-credentials:
-	docker exec -it kafka kafka-console-consumer --topic raw.safetyculture.credentials --from-beginning --bootstrap-server localhost:9092
+# Development helpers (hidden from help)
+watch-%:
+	docker exec -it kafka kafka-console-consumer --topic $* --from-beginning --bootstrap-server localhost:9092

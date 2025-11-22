@@ -235,7 +235,7 @@ object ScPollerService {
             // Publish user to Kafka
             val userJson = user.asJson.noSpaces
             val userRecord = new ProducerRecord[String, String](
-              "raw.safetyculture.users",
+              "raw-safetyculture-users",
               user.email,
               userJson
             )
@@ -250,7 +250,7 @@ object ScPollerService {
                 credentials.foreach { credential =>
                   val credentialJson = credential.asJson.noSpaces
                   val credentialRecord = new ProducerRecord[String, String](
-                    "raw.safetyculture.credentials",
+                    "raw-safetyculture-credentials",
                     user.id,
                     credentialJson
                   )

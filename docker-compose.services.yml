@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  sc-poller:
+    build:
+      context: ./services/sc-poller
+      dockerfile: Dockerfile
+    container_name: sc-poller
+    environment:
+      SAFETYCULTURE_API_TOKEN: ${SAFETYCULTURE_API_TOKEN}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POLL_INTERVAL: ${POLL_INTERVAL:-300}
+    networks:
+      - kafka-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  kafka-network:
+    external: true

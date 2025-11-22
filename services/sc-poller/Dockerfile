@@ -1,9 +1,26 @@
-FROM hseeberger/scala-sbt:11.0.18_1.9.0_2.13.11 AS builder
+# Stage 1: Build the application
+FROM sbtscala/scala-sbt:eclipse-temurin-jammy-11.0.22_7_1.9.9_2.13.13 AS builder
 WORKDIR /build
-COPY . .
-RUN sbt clean assembly
 
-FROM openjdk:11-jre-slim
+# Copy build definition files first (for better caching)
+COPY build.sbt ./
+COPY project ./project/
+
+# Download dependencies (this layer gets cached if build.sbt doesn't change)
+RUN sbt update
+
+# Copy source code
+COPY src ./src/
+
+# Compile and create runtime distribution
+RUN sbt compile stage
+
+# Stage 2: Runtime image (much smaller)
+FROM eclipse-temurin:11-jre-jammy
 WORKDIR /app
-COPY --from=builder /build/target/scala-2.13/*.jar app.jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+# Copy only the built application from builder stage
+COPY --from=builder /build/target/universal/stage ./
+
+# The sbt-native-packager creates a bin/ directory with startup scripts
+ENTRYPOINT ["./bin/sc-poller"]

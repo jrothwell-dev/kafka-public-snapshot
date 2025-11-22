@@ -2,6 +2,9 @@ name := "sc-poller"
 version := "1.0"
 scalaVersion := "2.13.12"
 
+// Enable the native packager plugin
+enablePlugins(JavaAppPackaging)
+
 libraryDependencies ++= Seq(
   "org.apache.kafka" % "kafka-clients" % "3.5.1",
   "com.typesafe" % "config" % "1.4.2",
