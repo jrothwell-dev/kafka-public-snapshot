@@ -9,7 +9,8 @@ case class AppConfig(
   kafka: KafkaConfig,
   redis: RedisConfig,
   smtp: SmtpConfig,
-  apiPoller: ApiPollerConfig
+  apiPoller: ApiPollerConfig,
+  notificationService: NotificationServiceConfig
 )
 
 case class AppSettings(
@@ -43,7 +44,9 @@ case class KafkaConfig(
 case class KafkaTopics(
   userEvents: String,
   databaseChanges: String,
-  complianceIssues: String
+  complianceIssues: String,
+  notificationRequests: String,
+  notificationEvents: String
 )
 
 case class KafkaProducerConfig(
@@ -56,7 +59,8 @@ case class KafkaProducerConfig(
 case class KafkaConsumerConfig(
   groupId: String,
   autoOffsetReset: String,
-  enableAutoCommit: Boolean
+  enableAutoCommit: Boolean,
+  maxPollRecords: Int
 )
 
 case class RedisConfig(
@@ -82,4 +86,17 @@ case class SmtpConfig(
 case class ApiPollerConfig(
   pollInterval: Int,
   timeout: Int
+)
+
+case class NotificationServiceConfig(
+  enabled: Boolean,
+  pollInterval: Int,
+  maxRetries: Int,
+  retryDelay: Int,
+  rateLimit: RateLimitConfig
+)
+
+case class RateLimitConfig(
+  enabled: Boolean,
+  maxPerMinute: Int
 )

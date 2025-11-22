@@ -1,0 +1,20 @@
+TO: jordanr@murrumbidgee.nsw.gov.au
+SUBJECT: Compliance Alert: {{issue_type}}
+
+COMPLIANCE ALERT
+
+Issue Type: {{issue_type}}
+Severity: {{severity}}
+Detected: {{detected_at}}
+
+Description:
+{{description}}
+
+Affected Entity: {{affected_entity_type}} #{{affected_entity_id}}
+
+Action Required:
+Please review and address this compliance issue as soon as possible.
+
+---
+This is an automated alert from the Kafka Demo Compliance System.
+For questions, contact: jordanr@murrumbidgee.nsw.gov.au
