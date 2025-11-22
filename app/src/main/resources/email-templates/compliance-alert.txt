@@ -1,4 +1,4 @@
-TO: jordanr@murrumbidgee.nsw.gov.au
+TO: {{recipient_email}}
 SUBJECT: Compliance Alert: {{issue_type}}
 
 COMPLIANCE ALERT

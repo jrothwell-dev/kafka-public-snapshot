@@ -1,4 +1,4 @@
-package com.demo.notification
+package com.demo.manual
 
 import com.demo.config.ConfigLoader
 import com.demo.notification.kafka.NotificationProducer

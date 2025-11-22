@@ -1,4 +1,4 @@
-TO: jordanr@murrumbidgee.nsw.gov.au
+TO: {{recipient_email}}
 SUBJECT: Test Email from Kafka Demo Application
 
 Hello Jordan,

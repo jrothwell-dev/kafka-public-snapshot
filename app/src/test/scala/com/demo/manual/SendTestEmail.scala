@@ -1,4 +1,4 @@
-package com.demo
+package com.demo.manual
 
 import com.demo.config.ConfigLoader
 import com.demo.service.{EmailService, EmailTemplateLoader}

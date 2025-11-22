@@ -1,4 +1,4 @@
-package com.demo.safetyculture
+package com.demo.manual
 
 import com.demo.config.ConfigLoader
 

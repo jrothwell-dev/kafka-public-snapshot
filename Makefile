@@ -1,3 +1,9 @@
+# Load environment variables from .env file
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
 .PHONY: help up down restart logs clean build run test email
 
 # Default target
@@ -80,14 +86,17 @@ kafka-topics:
 	docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
 
 kafka-create:
-	docker exec -it kafka kafka-topics --create --topic user-events --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic database-changes --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic compliance-issues --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic notification-requests --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
-	docker exec -it kafka kafka-topics --create --topic notification-events --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic raw.safetyculture.users --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic raw.safetyculture.credentials --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic processed.wwcc.status --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic events.compliance.issues --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic events.notifications.sent --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic commands.notifications --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
+	docker exec -it kafka kafka-topics --create --topic commands.poll.safetyculture --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1 --if-not-exists
 	@echo ""
-	@echo "Created topics:"
-	@docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
+	@echo "Created ETL topics:"
+	@docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092 | sort
+
 
 kafka-consume:
 	docker exec -it kafka kafka-console-consumer --topic user-events --from-beginning --bootstrap-server localhost:9092
@@ -105,3 +114,32 @@ urls:
 	@echo "  Prometheus:         http://prometheus.localhost"
 	@echo "  Grafana:            http://grafana.localhost (admin/admin)"
 	@echo ""
+
+# Service-specific testing
+sc-poller-build:
+	cd services/sc-poller && sbt compile
+
+sc-poller-local:
+	cd services/sc-poller && \
+	SAFETYCULTURE_API_TOKEN=$${SAFETYCULTURE_API_TOKEN} \
+	KAFKA_BOOTSTRAP_SERVERS=localhost:9092 \
+	POLL_INTERVAL=30 \
+	sbt run
+
+sc-poller-docker-build:
+	docker build -t sc-poller:latest services/sc-poller/
+
+sc-poller-docker-run:
+	docker run --rm \
+	--network kafka-network \
+	-e SAFETYCULTURE_API_TOKEN=$${SAFETYCULTURE_API_TOKEN} \
+	-e KAFKA_BOOTSTRAP_SERVERS=kafka:29092 \
+	-e POLL_INTERVAL=30 \
+	sc-poller:latest
+
+# Watch Kafka topics
+watch-raw-users:
+	docker exec -it kafka kafka-console-consumer --topic raw.safetyculture.users --from-beginning --bootstrap-server localhost:9092
+
+watch-raw-credentials:
+	docker exec -it kafka kafka-console-consumer --topic raw.safetyculture.credentials --from-beginning --bootstrap-server localhost:9092
