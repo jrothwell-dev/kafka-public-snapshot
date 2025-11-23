@@ -50,6 +50,24 @@ topics:
 		done'
 	@echo "Topics ready"
 
+clear-topics:
+	@echo "Clearing all Kafka topics..."
+	@docker exec kafka sh -c ' \
+		for topic in \
+			"reference.wwcc.required" \
+			"raw.safetyculture.users" \
+			"raw.safetyculture.credentials" \
+			"processed.wwcc.status" \
+			"events.compliance.issues" \
+			"events.notifications.sent" \
+			"commands.notifications"; do \
+			kafka-topics --delete --topic $$topic --bootstrap-server localhost:9092 2>/dev/null || true; \
+		done'
+	@sleep 5
+	@echo "Recreating topics..."
+	@make topics
+	@echo "✓ All topics cleared and recreated"
+
 list-topics:
 	@docker exec kafka kafka-topics --list --bootstrap-server localhost:9092 | sort
 
@@ -84,14 +102,9 @@ logs:
 	@docker-compose -f docker-compose.services.yml logs -f --tail=50
 
 seed:
-	@echo '{"email":"jordanr@murrumbidgee.nsw.gov.au","department":"IT Services","position":"Systems Administrator","requiresWwcc":true,"startDate":"2024-01-15"}' | \
+	@echo '{"requiredUsers":[{"email":"jordanr@murrumbidgee.nsw.gov.au","firstName":"Jordan","lastName":"Rothwell","department":"IT Services","position":"Systems Administrator","requiresWwcc":true,"startDate":"2024-01-15"},{"email":"zackw@murrumbidgee.nsw.gov.au","firstName":"Zack","lastName":"Walsh","department":"Community Services","position":"Youth Worker","requiresWwcc":true,"startDate":"2024-03-01"},{"email":"sarahm@murrumbidgee.nsw.gov.au","firstName":"Sarah","lastName":"Mitchell","department":"Youth Programs","position":"Program Coordinator","requiresWwcc":true,"startDate":"2024-06-01"}],"timestamp":"'$$(date -Iseconds)'"}' | \
 		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
-	@echo '{"email":"sarah.mitchell@murrumbidgee.nsw.gov.au","department":"Community Services","position":"Youth Worker","requiresWwcc":true,"startDate":"2024-03-01"}' | \
-		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
-	@echo '{"email":"james.peterson@murrumbidgee.nsw.gov.au","department":"Youth Programs","position":"Program Coordinator","requiresWwcc":true,"startDate":"2025-12-01"}' | \
-		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
-	@echo '{"email":"emily.rodriguez@murrumbidgee.nsw.gov.au","department":"Recreation Services","position":"Sports Coach","requiresWwcc":true,"startDate":"2026-01-15"}' | \
-		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
+	@echo "✓ Seeded required WWCC users list"
 
 status:
 	@echo "Infrastructure:"

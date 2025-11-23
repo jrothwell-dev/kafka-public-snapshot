@@ -14,10 +14,17 @@ import scala.collection.mutable
 // Input models
 case class RequiredUser(
   email: String,
+  firstName: String,
+  lastName: String,
   department: String,
   position: String,
   requiresWwcc: Boolean,
   startDate: String
+)
+
+case class RequiredUsersList(
+  requiredUsers: Seq[RequiredUser],
+  timestamp: String
 )
 
 case class ExpiryDate(year: Int, month: Int, day: Int) {
@@ -71,19 +78,28 @@ object WwccTransformerService {
     println("[INFO] WWCC Transformer Service Starting")
     println("[INFO] Consumer group: wwcc-transformer-v3")  // New group name
     
-    // Consumer props
-    val consumerProps = new Properties()
-    consumerProps.put("bootstrap.servers", kafkaBootstrap)
-    consumerProps.put("group.id", "wwcc-transformer-v3")  // New clean group
-    consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    consumerProps.put("auto.offset.reset", "latest")  // Only process new messages
-    consumerProps.put("enable.auto.commit", "true")
-    
-    val requiredConsumer = new KafkaConsumer[String, String](consumerProps)
+    // Required users consumer
+    val requiredConsumerProps = new Properties()
+    requiredConsumerProps.put("bootstrap.servers", kafkaBootstrap)
+    requiredConsumerProps.put("group.id", "wwcc-transformer-required-v1")
+    requiredConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    requiredConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    requiredConsumerProps.put("auto.offset.reset", "earliest")
+    requiredConsumerProps.put("enable.auto.commit", "true")
+
+    val requiredConsumer = new KafkaConsumer[String, String](requiredConsumerProps)
     requiredConsumer.subscribe(List("reference.wwcc.required").asJava)
-    
-    val credentialConsumer = new KafkaConsumer[String, String](consumerProps)
+
+    // Credentials consumer
+    val credentialConsumerProps = new Properties()
+    credentialConsumerProps.put("bootstrap.servers", kafkaBootstrap)
+    credentialConsumerProps.put("group.id", "wwcc-transformer-v3")
+    credentialConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    credentialConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
+    credentialConsumerProps.put("auto.offset.reset", "earliest")
+    credentialConsumerProps.put("enable.auto.commit", "true")
+
+    val credentialConsumer = new KafkaConsumer[String, String](credentialConsumerProps)
     credentialConsumer.subscribe(List("raw.safetyculture.credentials").asJava)
     
     // Producer
@@ -95,7 +111,8 @@ object WwccTransformerService {
     val producer = new KafkaProducer[String, String](producerProps)
     
     // State tracking
-    val requiredUsers = mutable.Map[String, RequiredUser]()
+    var currentRequiredUsers: Map[String, RequiredUser] = Map.empty
+    var lastRequiredUpdate: Option[String] = None
     val userCredentials = mutable.Map[String, Credential]()
     val processedMissingUsers = mutable.Set[String]()
     var lastMissingCheck = System.currentTimeMillis()
@@ -108,16 +125,23 @@ object WwccTransformerService {
         val requiredRecords = requiredConsumer.poll(Duration.ofMillis(100))
         requiredRecords.asScala.foreach { record =>
           try {
-            decode[RequiredUser](record.value()) match {
-              case Right(user) => 
-                requiredUsers(user.email.toLowerCase) = user
-                println(s"[INFO] Tracked required user: ${user.email}")
+            decode[RequiredUsersList](record.value()) match {
+              case Right(usersList) => 
+                // Replace the entire required users map with the new list
+                currentRequiredUsers = usersList.requiredUsers.map { user =>
+                  s"${user.firstName.toLowerCase}_${user.lastName.toLowerCase}" -> user
+                }.toMap
+                lastRequiredUpdate = Some(usersList.timestamp)
+                println(s"[INFO] Updated required users list: ${usersList.requiredUsers.size} users (timestamp: ${usersList.timestamp})")
+                usersList.requiredUsers.foreach { u =>
+                  println(s"  - ${u.firstName} ${u.lastName} (${u.email})")
+                }
               case Left(e) => 
-                println(s"[WARN] Skipping malformed required user record: ${e.getMessage.take(100)}")
+                println(s"[WARN] Failed to parse required users list: ${e.getMessage.take(200)}")
             }
           } catch {
             case e: Exception => 
-              println(s"[WARN] Error processing required user record: ${e.getMessage}")
+              println(s"[WARN] Error processing required users list: ${e.getMessage}")
           }
         }
         
@@ -131,7 +155,7 @@ object WwccTransformerService {
                 userCredentials(cred.subject_user_id) = cred
                 
                 // Try multiple matching strategies
-                val matchedUser = findMatchingUser(cred, requiredUsers.values.toList)
+                val matchedUser = findMatchingUser(cred, currentRequiredUsers.values.toList)
                 
                 val expiryDays = try {
                   cred.attributes.expiry_period_end_date.map { exp =>
@@ -213,8 +237,10 @@ object WwccTransformerService {
         
         // Check for missing WWCCs periodically (every 30 seconds)
         if (System.currentTimeMillis() - lastMissingCheck > 30000) {
-          checkMissingWwcc(requiredUsers, userCredentials, producer, processedMissingUsers)
-          lastMissingCheck = System.currentTimeMillis()
+          if (currentRequiredUsers.nonEmpty) {
+            checkMissingWwcc(currentRequiredUsers, userCredentials, producer, processedMissingUsers)
+            lastMissingCheck = System.currentTimeMillis()
+          }
         }
         
         Thread.sleep(1000) // Check every second
@@ -228,41 +254,30 @@ object WwccTransformerService {
   }
   
   def findMatchingUser(cred: Credential, requiredUsers: List[RequiredUser]): Option[RequiredUser] = {
-    val firstName = cred.subject_user.first_name.toLowerCase
-    val lastName = cred.subject_user.last_name.toLowerCase
+    val credFirstName = cred.subject_user.first_name.toLowerCase.trim
+    val credLastName = cred.subject_user.last_name.toLowerCase.trim
     
-    // Try exact email match
     requiredUsers.find { user =>
-      val emailPrefix = user.email.split("@").head.toLowerCase
-      emailPrefix == s"$firstName.$lastName" ||
-      emailPrefix == s"$firstName$lastName" ||
-      emailPrefix == s"${firstName.head}$lastName" ||
-      emailPrefix == s"$firstName${lastName.head}"
-    }.orElse {
-      // Try partial matches
-      requiredUsers.find { user =>
-        val emailPrefix = user.email.split("@").head.toLowerCase
-        emailPrefix.contains(firstName) || emailPrefix.contains(lastName)
-      }
+      user.firstName.toLowerCase.trim == credFirstName && 
+      user.lastName.toLowerCase.trim == credLastName
     }
   }
   
   def checkMissingWwcc(
-    requiredUsers: mutable.Map[String, RequiredUser],
+    requiredUsers: Map[String, RequiredUser],
     userCredentials: mutable.Map[String, Credential],
     producer: KafkaProducer[String, String],
     processedMissing: mutable.Set[String]
   ): Unit = {
-    requiredUsers.foreach { case (email, user) =>
-      if (!processedMissing.contains(email)) {
+    requiredUsers.foreach { case (userKey, user) =>  // userKey is "firstname_lastname"
+      if (!processedMissing.contains(userKey)) {
         val hasCredential = userCredentials.values.exists { cred =>
-          val firstName = cred.subject_user.first_name.toLowerCase
-          val lastName = cred.subject_user.last_name.toLowerCase
-          val emailPrefix = email.split("@").head.toLowerCase
+          val credFirstName = cred.subject_user.first_name.toLowerCase.trim
+          val credLastName = cred.subject_user.last_name.toLowerCase.trim
           
-          emailPrefix == s"$firstName.$lastName" ||
-          emailPrefix.contains(firstName) || 
-          emailPrefix.contains(lastName)
+          // Check by actual names
+          user.firstName.toLowerCase.trim == credFirstName && 
+          user.lastName.toLowerCase.trim == credLastName
         }
         
         if (!hasCredential) {
@@ -279,15 +294,11 @@ object WwccTransformerService {
             "MISSING"
           }
           
-          val nameParts = email.split("@").head.split("\\.")
-          val firstName = nameParts.headOption.map(_.capitalize).getOrElse("")
-          val lastName = nameParts.lastOption.map(_.capitalize).getOrElse("")
-          
           val compliance = WwccCompliance(
-            userId = email,
-            firstName = firstName,
-            lastName = lastName,
-            email = Some(email),
+            userId = user.email,  // Use email as userId for missing records
+            firstName = user.firstName,
+            lastName = user.lastName,
+            email = Some(user.email),
             department = Some(user.department),
             position = Some(user.position),
             startDate = Some(user.startDate),
@@ -304,12 +315,12 @@ object WwccTransformerService {
           
           producer.send(new ProducerRecord[String, String](
             "processed.wwcc.status",
-            email,
+            user.email,  // Use email as the Kafka key
             compliance.asJson.noSpaces
           ))
           
-          processedMissing += email
-          println(s"[INFO] Flagged missing WWCC: $email - $complianceStatus [${flags.mkString(", ")}]")
+          processedMissing += userKey  // Track by userKey to prevent reprocessing
+          println(s"[INFO] Flagged missing WWCC: ${user.email} (${user.firstName} ${user.lastName}) - $complianceStatus [${flags.mkString(", ")}]")
         }
       }
     }
