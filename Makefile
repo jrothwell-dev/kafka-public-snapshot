@@ -6,16 +6,17 @@ endif
 
 export DOCKER_BUILDKIT=1
 
-.PHONY: help up down clean status services logs seed topics reset
+.PHONY: help up down clean status services logs seed topics reset seed-rules wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-logs
 
 help:
 	@echo "Council Kafka Platform Commands:"
-	@echo "  make up       - Start infrastructure"
-	@echo "  make down     - Stop everything"
-	@echo "  make reset    - Clean restart"
-	@echo "  make services - Build/start microservices"
-	@echo "  make status   - Show status"
-	@echo "  make seed     - Seed test data"
+	@echo "  make up         - Start infrastructure"
+	@echo "  make down       - Stop everything"
+	@echo "  make reset      - Clean restart"
+	@echo "  make services   - Build/start microservices"
+	@echo "  make status     - Show status"
+	@echo "  make seed       - Seed test data"
+	@echo "  make seed-rules - Seed compliance rules"
 
 up:
 	@docker-compose up -d
@@ -37,6 +38,7 @@ topics:
 	@docker exec kafka sh -c ' \
 		for topic in \
 			"reference.wwcc.required:1:1" \
+			"reference.compliance.rules:1:1" \
 			"raw.safetyculture.users:1:1" \
 			"raw.safetyculture.credentials:1:1" \
 			"processed.wwcc.status:3:1" \
@@ -55,6 +57,7 @@ clear-topics:
 	@docker exec kafka sh -c ' \
 		for topic in \
 			"reference.wwcc.required" \
+			"reference.compliance.rules" \
 			"raw.safetyculture.users" \
 			"raw.safetyculture.credentials" \
 			"processed.wwcc.status" \
@@ -98,6 +101,15 @@ sc-poller-up:
 sc-poller-logs:
 	@docker-compose -f docker-compose.services.yml logs -f sc-poller
 
+wwcc-compliance-monitor-build:
+	@docker-compose -f docker-compose.services.yml build wwcc-compliance-monitor
+
+wwcc-compliance-monitor-up:
+	@docker-compose -f docker-compose.services.yml up -d wwcc-compliance-monitor
+
+wwcc-compliance-monitor-logs:
+	@docker-compose -f docker-compose.services.yml logs -f wwcc-compliance-monitor
+
 logs:
 	@docker-compose -f docker-compose.services.yml logs -f --tail=50
 
@@ -105,6 +117,11 @@ seed:
 	@echo '{"requiredUsers":[{"email":"jordanr@murrumbidgee.nsw.gov.au","firstName":"Jordan","lastName":"Rothwell","department":"IT Services","position":"Systems Administrator","requiresWwcc":true,"startDate":"2024-01-15"},{"email":"zackw@murrumbidgee.nsw.gov.au","firstName":"Zack","lastName":"Walsh","department":"Community Services","position":"Youth Worker","requiresWwcc":true,"startDate":"2024-03-01"},{"email":"sarahm@murrumbidgee.nsw.gov.au","firstName":"Sarah","lastName":"Mitchell","department":"Youth Programs","position":"Program Coordinator","requiresWwcc":true,"startDate":"2024-06-01"}],"timestamp":"'$$(date -Iseconds)'"}' | \
 		docker exec -i kafka kafka-console-producer --topic reference.wwcc.required --bootstrap-server localhost:9092
 	@echo "✓ Seeded required WWCC users list"
+
+seed-rules:
+	@cat services/wwcc-compliance-monitor/compliance-rules.json | \
+		docker exec -i kafka kafka-console-producer --topic reference.compliance.rules --bootstrap-server localhost:9092
+	@echo "✓ Seeded compliance notification rules"
 
 status:
 	@echo "Infrastructure:"

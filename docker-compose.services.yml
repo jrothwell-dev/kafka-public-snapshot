@@ -29,6 +29,20 @@ services:
       - default
     restart: unless-stopped
 
+  wwcc-compliance-monitor:
+    build:
+      context: ./services/wwcc-compliance-monitor
+      dockerfile: Dockerfile
+    container_name: wwcc-compliance-monitor
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - default
+    restart: unless-stopped
+    depends_on:
+      - sc-poller
+      - wwcc-transformer
+
 networks:
   default:
     name: council-kafka-platform_kafka-network
