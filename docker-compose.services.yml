@@ -1,4 +1,5 @@
 services:
+
   sc-poller:
     build:
       context: ./services/sc-poller
@@ -16,6 +17,17 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  wwcc-transformer:
+    build:
+      context: ./services/wwcc-transformer
+      dockerfile: Dockerfile
+    container_name: wwcc-transformer
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - default
+    restart: unless-stopped
 
 networks:
   default:
