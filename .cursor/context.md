@@ -52,6 +52,67 @@ For detailed architecture information, read these local files (not in git):
 - Consumer group pattern: {service-name}-{topic-name}-v1
 - All partitions standardized to 3 (except reference topics = 1)
 
+## Testing Infrastructure
+
+### Test Scripts
+- `scripts/reset-pipeline.sh` - Complete pipeline reset (stop services, clear topics, clear Redis)
+- `scripts/seed-test-data.sh` - Seed consistent test data to Kafka topics
+  - Supports `--local-only` flag to skip SafetyCulture API and seed directly to Kafka
+  - Automatically calls `seed-safetyculture.sh` if `SAFETYCULTURE_API_TOKEN` is set
+- `scripts/seed-safetyculture.sh` - Push test credentials to SafetyCulture API
+  - Requires `SAFETYCULTURE_API_TOKEN` environment variable
+  - Creates/updates WWCC credentials for test users
+  - Searches for users by email and finds WWCC credential type automatically
+- `scripts/verify-pipeline.sh` - Verify data flow and message counts across topics
+
+### Make Targets
+- `make test-reset` - Complete pipeline reset (stop services, clear topics, clear Redis)
+- `make test-seed` - Seed consistent test data (calls `seed-test-data.sh`)
+- `make test-verify` - Verify data flow and message counts (calls `verify-pipeline.sh`)
+- `make test-full` - Full test cycle (reset, start services, seed, verify)
+- `make test-watch` - Watch all topics side by side
+- `make seed-safetyculture` - Push credentials to SafetyCulture API (requires `SAFETYCULTURE_API_TOKEN`)
+
+### Test User Scenarios
+The test data uses **real SafetyCulture users** with actual User IDs. See `seed-data/safetyculture-users.csv` for reference.
+
+1. **Jordan Rothwell** (jordanr@murrumbidgee.nsw.gov.au)
+   - User ID: `user_9f1df31ae0e241eca8402bec126a2cda`
+   - Department: IT Services
+   - Scenario: **EXPIRED** - Credential expired (past date: 2024-11-01)
+   - Should trigger compliance alerts
+
+2. **Zack Walsh** (zackw@murrumbidgee.nsw.gov.au)
+   - User ID: `user_80ecbab5eb5f4fec848c0d0c29b10c43`
+   - Department: Community Services
+   - Scenario: **EXPIRING** - Credential expiring soon (within 30 days: 2024-12-20)
+   - Should trigger warning notifications
+
+3. **Emma Bryce** (emmab@murrumbidgee.nsw.gov.au)
+   - User ID: `user_c015c9a618aa4d539d0c0a6c0408e498`
+   - Department: Youth Programs
+   - Scenario: **MISSING** - No credential in SafetyCulture (no credential seeded)
+   - Should trigger compliance alerts
+
+4. **Stephen Lockhart** (stephenl@murrumbidgee.nsw.gov.au)
+   - User ID: `user_63e34a09823d424db6be9f92ba5b81d4`
+   - Department: Recreation
+   - Scenario: **VALID** - Valid credential (expires 2026-12-31)
+   - Should show as compliant
+
+5. **Steve Goodsall** (steveg@murrumbidgee.nsw.gov.au)
+   - User ID: `user_c1f017bccd144000ac5324fec0613fe4`
+   - Department: Education
+   - Scenario: **NOT_APPROVED** - Credential exists but pending approval
+   - Should trigger compliance alerts
+
+### SafetyCulture API Integration
+- `seed-safetyculture.sh` can push test credentials directly to SafetyCulture via their API
+- This allows `sc-poller` to pick up real data from SafetyCulture instead of mock Kafka messages
+- Requires `SAFETYCULTURE_API_TOKEN` with "Platform management: Credentials" permission
+- Automatically searches for users by email and finds WWCC credential type
+- Falls back gracefully if users don't exist or API calls fail
+
 ## Known Issues
 
 ### 1. Data Duplication in processed.wwcc.status
@@ -66,10 +127,11 @@ For detailed architecture information, read these local files (not in git):
 - commands.notifications has 0 messages (router has nothing to consume)
 - Need to debug why compliance-monitor isn't producing issues
 
-### 3. No Testing Infrastructure
-- No easy way to reset/seed/verify pipeline
-- Have to manually check Kafka UI topic by topic
-- Need automated test validation
+### 3. Testing Infrastructure
+- ✅ Created test scripts (reset, seed, verify)
+- ✅ Added make targets for test workflow
+- ✅ Integrated SafetyCulture API seeding
+- ⚠️  Some test scenarios may need refinement based on actual API behavior
 
 ### 4. Redis Not Utilized
 - Redis is running but services don't use it for deduplication

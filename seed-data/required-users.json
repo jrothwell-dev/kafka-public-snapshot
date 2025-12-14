@@ -1,0 +1,50 @@
+{
+  "requiredUsers": [
+    {
+      "email": "jordanr@murrumbidgee.nsw.gov.au",
+      "firstName": "Jordan",
+      "lastName": "Rothwell",
+      "department": "IT Services",
+      "position": "Systems Administrator",
+      "requiresWwcc": true,
+      "startDate": "2024-01-15"
+    },
+    {
+      "email": "zackw@murrumbidgee.nsw.gov.au",
+      "firstName": "Zack",
+      "lastName": "Walsh",
+      "department": "Community Services",
+      "position": "Youth Worker",
+      "requiresWwcc": true,
+      "startDate": "2024-03-01"
+    },
+    {
+      "email": "emmab@murrumbidgee.nsw.gov.au",
+      "firstName": "Emma",
+      "lastName": "Bryce",
+      "department": "Youth Programs",
+      "position": "Program Coordinator",
+      "requiresWwcc": true,
+      "startDate": "2024-06-01"
+    },
+    {
+      "email": "stephenl@murrumbidgee.nsw.gov.au",
+      "firstName": "Stephen",
+      "lastName": "Lockhart",
+      "department": "Recreation",
+      "position": "Sports Coordinator",
+      "requiresWwcc": true,
+      "startDate": "2024-02-10"
+    },
+    {
+      "email": "steveg@murrumbidgee.nsw.gov.au",
+      "firstName": "Steve",
+      "lastName": "Goodsall",
+      "department": "Education",
+      "position": "Education Officer",
+      "requiresWwcc": true,
+      "startDate": "2024-04-20"
+    }
+  ],
+  "timestamp": "2024-12-19T10:00:00Z"
+}

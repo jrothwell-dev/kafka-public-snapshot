@@ -18,11 +18,11 @@ TOPICS = \
 	reference.wwcc.required:1:1 \
 	reference.compliance.rules:1:1 \
 	raw.safetyculture.users:1:1 \
-	raw.safetyculture.credentials:1:1 \
+	raw.safetyculture.credentials:3:1 \
 	processed.wwcc.status:3:1 \
 	events.compliance.issues:3:1 \
 	events.notifications.sent:3:1 \
-	commands.notifications:5:1
+	commands.notifications:3:1
 
 .PHONY: help \
 	up down reset clean \
@@ -32,7 +32,8 @@ TOPICS = \
 	wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-down wwcc-compliance-monitor-restart wwcc-compliance-monitor-logs wwcc-compliance-monitor-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
-	seed seed-rules seed-all rebuild-all \
+	seed seed-rules seed-safetyculture seed-all rebuild-all \
+	test-reset test-seed test-verify test-full test-watch \
 	status health logs watch \
 	dev dev-build dev-up dev-down dev-restart
 
@@ -77,7 +78,15 @@ help:
 	@echo "🌱 Data Seeding:"
 	@echo "  make seed            - Seed required WWCC users"
 	@echo "  make seed-rules      - Seed compliance rules"
+	@echo "  make seed-safetyculture - Push credentials to SafetyCulture API"
 	@echo "  make seed-all       - Seed all test data"
+	@echo ""
+	@echo "🧪 Testing Infrastructure:"
+	@echo "  make test-reset      - Complete pipeline reset (stop services, clear topics, clear Redis)"
+	@echo "  make test-seed       - Seed consistent test data"
+	@echo "  make test-verify     - Verify data flow and message counts"
+	@echo "  make test-full       - Full test cycle (reset, start, seed, verify)"
+	@echo "  make test-watch      - Watch all topics side by side"
 	@echo ""
 	@echo "🔄 Rebuild & Setup:"
 	@echo "  make rebuild-all    - Rebuild all services, restart, and seed data"
@@ -316,6 +325,11 @@ seed-rules:
 	@cat services/wwcc-compliance-monitor/compliance-rules.json | jq -c '.' | docker exec -i $(KAFKA_CONTAINER) kafka-console-producer --topic reference.compliance.rules --bootstrap-server $(KAFKA_BOOTSTRAP)
 	@echo "✅ Seeded compliance notification rules"
 
+seed-safetyculture:
+	@echo "🌱 Pushing credentials to SafetyCulture API..."
+	@./scripts/seed-safetyculture.sh
+	@echo "✅ SafetyCulture seeding complete"
+
 seed-all: seed seed-rules
 	@echo "✅ All test data seeded"
 
@@ -366,6 +380,74 @@ status:
 	@echo "  Grafana:    http://localhost:3000"
 	@echo "  Traefik:    http://localhost:8080"
 	@echo "  Prometheus: http://localhost:9090"
+
+# ============================================================================
+# Testing Infrastructure
+# ============================================================================
+
+test-reset:
+	@echo "🔄 Running pipeline reset..."
+	@./scripts/reset-pipeline.sh
+
+test-seed:
+	@echo "🌱 Seeding test data..."
+	@./scripts/seed-test-data.sh
+
+test-verify:
+	@echo "✅ Verifying pipeline..."
+	@./scripts/verify-pipeline.sh
+
+test-full: test-reset
+	@echo "🚀 Starting services..."
+	@$(MAKE) services-up
+	@echo "⏳ Waiting 30 seconds for services to initialize..."
+	@sleep 30
+	@echo "🌱 Seeding test data..."
+	@$(MAKE) test-seed
+	@echo "⏳ Waiting 10 seconds for data to process..."
+	@sleep 10
+	@echo "✅ Verifying pipeline..."
+	@$(MAKE) test-verify
+
+test-watch:
+	@echo "👀 Watching all topics..."
+	@echo "Press Ctrl+C to stop"
+	@echo ""
+	@echo "=== raw.safetyculture.credentials ==="
+	@timeout 5 docker exec -it $(KAFKA_CONTAINER) kafka-console-consumer \
+		--topic raw.safetyculture.credentials \
+		--from-beginning \
+		--bootstrap-server $(KAFKA_BOOTSTRAP) \
+		--property print.timestamp=true \
+		--property print.key=true \
+		--max-messages 5 2>/dev/null || true
+	@echo ""
+	@echo "=== processed.wwcc.status ==="
+	@timeout 5 docker exec -it $(KAFKA_CONTAINER) kafka-console-consumer \
+		--topic processed.wwcc.status \
+		--from-beginning \
+		--bootstrap-server $(KAFKA_BOOTSTRAP) \
+		--property print.timestamp=true \
+		--property print.key=true \
+		--max-messages 5 2>/dev/null || true
+	@echo ""
+	@echo "=== events.compliance.issues ==="
+	@timeout 5 docker exec -it $(KAFKA_CONTAINER) kafka-console-consumer \
+		--topic events.compliance.issues \
+		--from-beginning \
+		--bootstrap-server $(KAFKA_BOOTSTRAP) \
+		--property print.timestamp=true \
+		--property print.key=true \
+		--max-messages 5 2>/dev/null || true
+	@echo ""
+	@echo "=== commands.notifications ==="
+	@timeout 5 docker exec -it $(KAFKA_CONTAINER) kafka-console-consumer \
+		--topic commands.notifications \
+		--from-beginning \
+		--bootstrap-server $(KAFKA_BOOTSTRAP) \
+		--property print.timestamp=true \
+		--property print.key=true \
+		--max-messages 5 2>/dev/null || true
 
 logs:
 	@docker-compose -f $(SERVICES_FILE) logs -f --tail=50
