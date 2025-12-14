@@ -1,5 +1,37 @@
 # Cursor Context
 
+## Rules for AI Assistant
+
+IMPORTANT: Follow these rules for EVERY task:
+
+1. After completing any task, update this file (.cursor/context.md) with:
+   - What was done
+   - Current status of components
+   - Any new issues discovered
+
+2. After completing any task, update docs/ARCHITECTURE_FIXES.md with:
+   - Mark completed items as DONE
+   - Add any new issues discovered
+   - Update implementation notes
+
+3. After completing any task, commit all changes:
+   - Stage all changes: git add -A
+   - Commit with descriptive message: git commit -m "type: description"
+   - Confirm clean git status
+
+4. Before starting any task, read:
+   - This file for current project state
+   - docs/ARCHITECTURE_FIXES.md for pending issues
+   - docs/ARCHITECTURE_REVIEW.md for detailed architecture decisions
+
+5. If you discover new issues or bugs during work:
+   - Document them immediately in the "Known Issues" section below
+   - Do not ignore them
+
+These rules ensure continuity between chat sessions.
+
+---
+
 ## Project Overview
 WWCC Compliance Monitoring Platform - Kafka streaming pipeline for monitoring Working With Children Check compliance.
 
