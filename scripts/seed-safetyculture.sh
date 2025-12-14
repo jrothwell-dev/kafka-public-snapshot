@@ -7,7 +7,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
+
+# Debug mode flag
+DEBUG=false
+if [[ "$*" == *"--debug"* ]] || [[ "$*" == *"-d"* ]]; then
+  DEBUG=true
+fi
 
 # Check for API token
 if [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
@@ -73,10 +80,35 @@ get_wwcc_credential_type() {
   local http_code=$(echo "$response" | tail -n1)
   local body=$(echo "$response" | sed '$d')
   
+  if [ "$DEBUG" = true ]; then
+    echo -e "${CYAN}[DEBUG] Credential types API response (HTTP $http_code):${NC}"
+    echo "$body" | jq '.' 2>/dev/null || echo "$body"
+    echo ""
+  fi
+  
   if [ "$http_code" = "200" ]; then
-    # Try to find WWCC credential type (case insensitive)
-    echo "$body" | jq -r '.credential_types[] | select(.name | test("(?i)(wwcc|working.*children|children.*check)")) | .id' 2>/dev/null | head -n1
+    # Show all credential types found
+    local all_types=$(echo "$body" | jq -r '.types_list[]? | "  - \(.name) (ID: \(.id))"' 2>/dev/null)
+    if [ -n "$all_types" ]; then
+      echo -e "${BLUE}Available credential types:${NC}"
+      echo "$all_types"
+      echo ""
+    fi
+    
+    # Try to find "Working With Children Check" (exact match first)
+    local wwcc_id=$(echo "$body" | jq -r '.types_list[]? | select(.name == "Working With Children Check") | .id' 2>/dev/null)
+    
+    # If not found, try case-insensitive partial match on "children"
+    if [ -z "$wwcc_id" ]; then
+      wwcc_id=$(echo "$body" | jq -r '.types_list[]? | select(.name | test("(?i)children")) | .id' 2>/dev/null | head -n1)
+    fi
+    
+    echo "$wwcc_id"
   else
+    if [ "$DEBUG" = true ]; then
+      echo -e "${RED}[DEBUG] Failed to get credential types: HTTP $http_code${NC}"
+      echo "$body"
+    fi
     echo ""
   fi
 }
@@ -99,8 +131,8 @@ create_credential() {
   local expiry_date=$(printf "%04d-%02d-%02d" "$expiry_year" "$expiry_month" "$expiry_day")
   
   # Build request body for creating/updating credential
-  # Note: This uses the UpdateDocumentVersionForUser endpoint pattern
-  # The actual endpoint may vary based on SafetyCulture API version
+  # Note: SafetyCulture API requires PATCH to existing document/version
+  # Creating new credentials may require different endpoint or manual creation
   local request_body=$(cat <<EOF
 {
   "subject_user_id": "$user_id",
@@ -126,18 +158,40 @@ create_credential() {
 EOF
 )
   
-  # Try to update/create credential
-  # Note: SafetyCulture API may require different endpoints for create vs update
-  # This attempts the update endpoint which may create if it doesn't exist
+  if [ "$DEBUG" = true ]; then
+    echo -e "${CYAN}[DEBUG] Creating credential for $first_name $last_name${NC}"
+    echo -e "${CYAN}[DEBUG] User ID: $user_id${NC}"
+    echo -e "${CYAN}[DEBUG] Credential Type ID: $credential_type_id${NC}"
+    echo -e "${CYAN}[DEBUG] Request body:${NC}"
+    echo "$request_body" | jq '.' 2>/dev/null || echo "$request_body"
+    echo ""
+    echo -e "${CYAN}[DEBUG] Full curl command would be:${NC}"
+    echo "curl -X POST \"$API_BASE/credentials/v1/document-versions\" \\"
+    echo "  -H \"Authorization: Bearer \$SAFETYCULTURE_API_TOKEN\" \\"
+    echo "  -H \"Content-Type: application/json\" \\"
+    echo "  -d '$(echo "$request_body" | jq -c . 2>/dev/null || echo "$request_body")'"
+    echo ""
+  fi
+  
+  # Try to create credential
+  # Note: SafetyCulture API may not support creating credentials via API
+  # This endpoint may only work for updating existing credentials
   local response=$(api_call "POST" "/credentials/v1/document-versions" "$request_body" \
     "creating credential for $first_name $last_name")
   local http_code=$(echo "$response" | tail -n1)
   local body=$(echo "$response" | sed '$d')
   
+  if [ "$DEBUG" = true ]; then
+    echo -e "${CYAN}[DEBUG] API Response (HTTP $http_code):${NC}"
+    echo "$body" | jq '.' 2>/dev/null || echo "$body"
+    echo ""
+  fi
+  
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
     return 0
   else
-    echo "$body" >&2
+    echo -e "${RED}API Error Response:${NC}"
+    echo "$body" | jq '.' 2>/dev/null || echo "$body"
     return 1
   fi
 }
@@ -147,12 +201,20 @@ echo -e "${YELLOW}[1/4] Finding WWCC credential type...${NC}"
 WWCC_TYPE_ID=$(get_wwcc_credential_type)
 
 if [ -z "$WWCC_TYPE_ID" ]; then
-  echo -e "${YELLOW}⚠️  Could not find WWCC credential type automatically${NC}"
-  echo -e "${BLUE}   You may need to specify it manually or create it in SafetyCulture first${NC}"
-  echo -e "${BLUE}   Using placeholder: doc-type-wwcc${NC}"
-  WWCC_TYPE_ID="doc-type-wwcc"
+  echo -e "${RED}❌ Could not find 'Working With Children Check' credential type${NC}"
+  echo -e "${YELLOW}   Please check the credential types listed above${NC}"
+  echo -e "${YELLOW}   You may need to create it in SafetyCulture UI first${NC}"
+  echo ""
+  echo -e "${BLUE}   To manually create test credentials:${NC}"
+  echo -e "${BLUE}   1. Go to SafetyCulture web app${NC}"
+  echo -e "${BLUE}   2. Navigate to Credentials section${NC}"
+  echo -e "${BLUE}   3. Create credentials for test users with appropriate expiry dates${NC}"
+  echo -e "${BLUE}   4. Then sc-poller will pick them up automatically${NC}"
+  echo ""
+  exit 1
 else
   echo -e "${GREEN}✓ Found WWCC credential type: $WWCC_TYPE_ID${NC}"
+  echo -e "${GREEN}  Name: Working With Children Check${NC}"
 fi
 echo ""
 
@@ -215,7 +277,9 @@ for email in "${!USER_SCENARIOS[@]}"; do
     ((SUCCESS_COUNT++))
   else
     echo -e "  ${RED}❌ Failed to create/update credential${NC}"
-    echo -e "  ${YELLOW}   Note: This may require specific API permissions or a different endpoint${NC}"
+    echo -e "  ${YELLOW}   Note: SafetyCulture API may not support creating credentials programmatically${NC}"
+    echo -e "  ${YELLOW}   You may need to create credentials manually in SafetyCulture UI${NC}"
+    echo -e "  ${YELLOW}   Then sc-poller will pick them up automatically${NC}"
     ((FAIL_COUNT++))
   fi
   echo ""
@@ -241,11 +305,20 @@ if [ $SUCCESS_COUNT -gt 0 ]; then
 fi
 
 if [ $FAIL_COUNT -gt 0 ]; then
-  echo -e "${YELLOW}⚠️  Some credentials could not be created${NC}"
+  echo -e "${YELLOW}⚠️  Some credentials could not be created via API${NC}"
   echo -e "${YELLOW}   Common reasons:${NC}"
   echo -e "${YELLOW}   - Users don't exist in SafetyCulture${NC}"
   echo -e "${YELLOW}   - API token lacks 'Platform management: Credentials' permission${NC}"
-  echo -e "${YELLOW}   - Different API endpoint required for credential creation${NC}"
+  echo -e "${YELLOW}   - SafetyCulture API may not support creating credentials programmatically${NC}"
+  echo ""
+  echo -e "${BLUE}   Alternative: Create credentials manually in SafetyCulture UI${NC}"
+  echo -e "${BLUE}   1. Go to SafetyCulture web app → Credentials${NC}"
+  echo -e "${BLUE}   2. Create credentials for test users with these expiry dates:${NC}"
+  echo -e "${BLUE}      - Jordan: expired (2024-11-01)${NC}"
+  echo -e "${BLUE}      - Zack: expiring (2024-12-20)${NC}"
+  echo -e "${BLUE}      - Stephen: valid (2026-12-31)${NC}"
+  echo -e "${BLUE}      - Steve: pending approval${NC}"
+  echo -e "${BLUE}   3. sc-poller will automatically fetch them on next poll${NC}"
   echo ""
 fi
 

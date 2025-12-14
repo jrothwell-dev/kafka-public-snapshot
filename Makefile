@@ -32,7 +32,7 @@ TOPICS = \
 	wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-down wwcc-compliance-monitor-restart wwcc-compliance-monitor-logs wwcc-compliance-monitor-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
-	seed seed-rules seed-safetyculture seed-all rebuild-all \
+	seed seed-rules seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
 	test-reset test-seed test-verify test-full test-watch \
 	status health logs watch \
 	dev dev-build dev-up dev-down dev-restart
@@ -329,6 +329,11 @@ seed-safetyculture:
 	@echo "🌱 Pushing credentials to SafetyCulture API..."
 	@./scripts/seed-safetyculture.sh
 	@echo "✅ SafetyCulture seeding complete"
+
+seed-safetyculture-debug:
+	@echo "🔍 Debug mode: Pushing credentials to SafetyCulture API..."
+	@./scripts/seed-safetyculture.sh --debug
+	@echo "✅ SafetyCulture seeding complete (debug mode)"
 
 seed-all: seed seed-rules
 	@echo "✅ All test data seeded"

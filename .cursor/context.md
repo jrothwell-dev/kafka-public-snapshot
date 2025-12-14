@@ -107,11 +107,17 @@ The test data uses **real SafetyCulture users** with actual User IDs. See `seed-
    - Should trigger compliance alerts
 
 ### SafetyCulture API Integration
-- `seed-safetyculture.sh` can push test credentials directly to SafetyCulture via their API
-- This allows `sc-poller` to pick up real data from SafetyCulture instead of mock Kafka messages
+- `seed-safetyculture.sh` attempts to push test credentials directly to SafetyCulture via their API
+- **Note**: SafetyCulture API may not support creating credentials programmatically
+- If API creation fails, credentials must be created manually in SafetyCulture UI:
+  1. Go to SafetyCulture web app → Credentials
+  2. Create credentials for test users with appropriate expiry dates
+  3. sc-poller will automatically fetch them on next poll
 - Requires `SAFETYCULTURE_API_TOKEN` with "Platform management: Credentials" permission
-- Automatically searches for users by email and finds WWCC credential type
+- Automatically searches for users by email and finds "Working With Children Check" credential type
+- Debug mode: `make seed-safetyculture-debug` shows full API requests/responses
 - Falls back gracefully if users don't exist or API calls fail
+- **Primary method**: Use `make test-seed` with `--local-only` flag to seed mock data directly to Kafka
 
 ## Known Issues
 
