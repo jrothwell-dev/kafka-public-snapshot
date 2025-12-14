@@ -144,19 +144,32 @@ The test data uses **real SafetyCulture users** with actual User IDs. See `seed-
 - Should track: which users have been processed, last seen credentials, etc.
 
 ### 5. No Observability
-- Grafana dashboards not configured
-- No way to see message flow rates, errors, consumer lag
-- Prometheus scrapers exist but no useful dashboards
+- ✅ Grafana dashboards configured
+- ✅ Dashboard created: `config/grafana/dashboards/wwcc-pipeline.json`
+- ✅ Auto-provisioning: `config/grafana/provisioning/dashboards/dashboard.yml`
+- ✅ Dashboard shows: topic message counts, consumer lag, service status, recent logs
+- Access: http://localhost:3000 (admin/admin) or http://grafana.localhost
 
 ### 6. No CI/CD
-- No automated tests
-- No build pipeline
-- No deployment validation
+- ✅ GitHub Actions CI workflow created: `.github/workflows/ci.yml`
+- ✅ GitHub Actions deploy workflow created: `.github/workflows/deploy.yml`
+- ✅ Make targets added: `make ci-test`, `make ci-build`
+- ✅ CI runs: test-reset, test-seed, test-verify on push/PR
+- ✅ Deploy workflow tags and pushes images to ghcr.io after CI passes
+
+## Recent Changes
+
+### 2024-12-XX: Added Observability and CI/CD
+- ✅ Created Grafana dashboard for pipeline visibility
+- ✅ Configured dashboard auto-provisioning
+- ✅ Added GitHub Actions CI workflow
+- ✅ Added GitHub Actions deploy workflow
+- ✅ Added CI make targets (ci-test, ci-build)
 
 ## Next Steps (Priority Order)
 1. Fix data duplication with Redis deduplication
 2. Debug compliance-monitor to understand why it's not producing
-3. Create clean test infrastructure (reset, seed, verify commands)
-4. Set up Grafana dashboards for visibility
-5. Add CI/CD pipeline with GitHub Actions
+3. Create clean test infrastructure (reset, seed, verify commands) - ✅ DONE
+4. Set up Grafana dashboards for visibility - ✅ DONE
+5. Add CI/CD pipeline with GitHub Actions - ✅ DONE
 6. Only THEN continue adding notification-service

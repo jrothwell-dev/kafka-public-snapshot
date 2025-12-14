@@ -34,6 +34,7 @@ TOPICS = \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-rules seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
 	test-reset test-seed test-verify test-full test-watch \
+	ci-test ci-build \
 	status health logs watch \
 	dev dev-build dev-up dev-down dev-restart
 
@@ -88,6 +89,10 @@ help:
 	@echo "  make test-verify     - Verify data flow and message counts"
 	@echo "  make test-full       - Full test cycle (reset, start, seed, verify)"
 	@echo "  make test-watch      - Watch all topics side by side"
+	@echo ""
+	@echo "🔄 CI/CD:"
+	@echo "  make ci-test         - Full CI test cycle (reset, seed, verify)"
+	@echo "  make ci-build        - Build all service Docker images"
 	@echo ""
 	@echo "🔄 Rebuild & Setup:"
 	@echo "  make rebuild-all    - Rebuild all services, restart, and seed data"
@@ -454,6 +459,28 @@ test-watch:
 		--property print.timestamp=true \
 		--property print.key=true \
 		--max-messages 5 2>/dev/null || true
+
+# ============================================================================
+# CI/CD Targets
+# ============================================================================
+
+ci-test: test-reset
+	@echo "🚀 Starting services..."
+	@$(MAKE) services-up
+	@echo "⏳ Waiting 30 seconds for services to initialize..."
+	@sleep 30
+	@echo "🌱 Seeding test data..."
+	@$(MAKE) test-seed
+	@echo "⏳ Waiting 10 seconds for data to process..."
+	@sleep 10
+	@echo "✅ Verifying pipeline..."
+	@$(MAKE) test-verify
+
+ci-build:
+	@echo "🔨 Building all service Docker images..."
+	@[ -n "$$SAFETYCULTURE_API_TOKEN" ] || (echo "⚠️  WARNING: SAFETYCULTURE_API_TOKEN not set, using dummy token for build"; export SAFETYCULTURE_API_TOKEN=dummy-token-for-build)
+	@$(MAKE) services-build
+	@echo "✅ All service images built"
 
 logs:
 	@docker-compose -f $(SERVICES_FILE) logs -f --tail=50

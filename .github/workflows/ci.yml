@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:17.7-alpine
+        env:
+          POSTGRES_USER: demo
+          POSTGRES_PASSWORD: demo123
+          POSTGRES_DB: demodata
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Start Docker Compose infrastructure
+        run: |
+          docker-compose up -d zookeeper kafka postgres redis prometheus grafana loki promtail kafka-exporter postgres-exporter redis-exporter
+          sleep 15
+          make topics
+      
+      - name: Build all service images
+        env:
+          SAFETYCULTURE_API_TOKEN: ${{ secrets.SAFETYCULTURE_API_TOKEN || 'dummy-token-for-build' }}
+        run: |
+          make services-build
+      
+      - name: Start all services
+        run: |
+          make services-up
+          sleep 30
+      
+      - name: Run test-reset
+        run: make test-reset
+        continue-on-error: true
+      
+      - name: Run test-seed
+        run: make test-seed
+        continue-on-error: true
+      
+      - name: Run test-verify
+        id: verify
+        run: make test-verify
+        continue-on-error: true
+      
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          mkdir -p logs
+          docker-compose -f docker-compose.services.yml logs > logs/services.log 2>&1 || true
+          docker logs sc-poller > logs/sc-poller.log 2>&1 || true
+          docker logs wwcc-transformer > logs/wwcc-transformer.log 2>&1 || true
+          docker logs wwcc-compliance-monitor > logs/wwcc-compliance-monitor.log 2>&1 || true
+          docker logs compliance-notification-router > logs/compliance-notification-router.log 2>&1 || true
+          docker logs kafka > logs/kafka.log 2>&1 || true
+      
+      - name: Upload logs artifact
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: logs/
+          retention-days: 7
+      
+      - name: Check verification result
+        if: steps.verify.outcome == 'failure'
+        run: |
+          echo "Pipeline verification failed"
+          exit 1
