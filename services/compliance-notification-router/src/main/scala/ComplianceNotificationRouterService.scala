@@ -155,19 +155,33 @@ object ComplianceNotificationRouterService {
           decode[ComplianceIssue](record.value()) match {
             case Right(issue) =>
               if (issue.notificationRequired) {
-                val notificationRequest = createNotificationRequest(issue)
-                
-                producer.send(new ProducerRecord[String, String](
-                  "commands.notifications",
-                  notificationRequest.id,
-                  notificationRequest.asJson.noSpaces
-                ))
-                
-                println(s"[INFO] Created notification request: ${notificationRequest.id}")
-                println(s"      Issue: ${issue.issueType} (${issue.severity})")
-                println(s"      User: ${issue.userName} (${issue.userId})")
-                println(s"      Recipients: ${notificationRequest.recipients.mkString(", ")}")
-                println(s"      Template: ${notificationRequest.template}")
+                createNotificationRequest(issue) match {
+                  case Some(notificationRequest) =>
+                    try {
+                      // Wait for send to complete to ensure message is persisted
+                      val metadata = producer.send(new ProducerRecord[String, String](
+                        "commands.notifications",
+                        notificationRequest.id,
+                        notificationRequest.asJson.noSpaces
+                      )).get() // Block until send completes
+                      
+                      println(s"[INFO] Created notification request: ${notificationRequest.id}")
+                      println(s"      Issue: ${issue.issueType} (${issue.severity})")
+                      println(s"      User: ${issue.userName} (${issue.userId})")
+                      println(s"      Recipients: ${notificationRequest.recipients.mkString(", ")}")
+                      println(s"      Template: ${notificationRequest.template}")
+                      println(s"      Published to partition ${metadata.partition()} at offset ${metadata.offset()}")
+                    } catch {
+                      case e: Exception =>
+                        println(s"[ERROR] Failed to publish notification request ${notificationRequest.id}: ${e.getMessage}")
+                        e.printStackTrace()
+                    }
+                  case None =>
+                    println(s"[WARN] Skipping notification for issue ${issue.issueId}: No recipients configured")
+                    println(s"      notify_employee: ${issue.notificationConfig.notify_employee}, email: ${issue.email.isDefined}")
+                    println(s"      notify_manager: ${issue.notificationConfig.notify_manager}")
+                    println(s"      notify_compliance_team: ${issue.notificationConfig.notify_compliance_team}")
+                }
               } else {
                 println(s"[DEBUG] Issue ${issue.issueId} does not require notification")
               }
@@ -186,11 +200,17 @@ object ComplianceNotificationRouterService {
     }
   }
   
-  def createNotificationRequest(issue: ComplianceIssue): NotificationRequest = {
+  def createNotificationRequest(issue: ComplianceIssue): Option[NotificationRequest] = {
     val recipients = buildRecipients(issue)
+    
+    // Validate that we have at least one recipient
+    if (recipients.isEmpty) {
+      return None
+    }
+    
     val templateData = buildTemplateData(issue)
     
-    NotificationRequest(
+    Some(NotificationRequest(
       id = java.util.UUID.randomUUID().toString,
       notificationType = NotificationType.Email, // Default to email for now
       template = issue.notificationConfig.template,
@@ -199,7 +219,7 @@ object ComplianceNotificationRouterService {
       priority = Priority.fromString(issue.notificationConfig.priority),
       requestedBy = "compliance-notification-router",
       requestedAt = Instant.now()
-    )
+    ))
   }
   
   def buildRecipients(issue: ComplianceIssue): Seq[String] = {
