@@ -79,6 +79,7 @@ help:
 	@echo "  make seed            - Seed required WWCC users"
 	@echo "  make seed-rules      - Seed compliance rules"
 	@echo "  make seed-safetyculture - Push credentials to SafetyCulture API"
+	@echo "  make seed-safetyculture-debug - Push with debug output"
 	@echo "  make seed-all       - Seed all test data"
 	@echo ""
 	@echo "🧪 Testing Infrastructure:"
