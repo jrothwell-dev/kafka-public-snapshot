@@ -95,30 +95,35 @@ The test data includes 5 users with different compliance states:
 
 ### 1. Jordan Rothwell - EXPIRED
 - **Email**: jordanr@murrumbidgee.nsw.gov.au
+- **User ID**: user_9f1df31ae0e241eca8402bec126a2cda
 - **Department**: IT Services
 - **Credential Status**: Expired (expiry date: 2024-11-01 - in the past)
 - **Expected Behavior**: Should trigger compliance alerts
 
 ### 2. Zack Walsh - EXPIRING
 - **Email**: zackw@murrumbidgee.nsw.gov.au
+- **User ID**: user_80ecbab5eb5f4fec848c0d0c29b10c43
 - **Department**: Community Services
 - **Credential Status**: Expiring soon (expiry date: 2024-12-20 - within 30 days)
 - **Expected Behavior**: Should trigger warning notifications
 
-### 3. Sarah Mitchell - MISSING
-- **Email**: sarahm@murrumbidgee.nsw.gov.au
+### 3. Emma Bryce - MISSING
+- **Email**: emmab@murrumbidgee.nsw.gov.au
+- **User ID**: user_c015c9a618aa4d539d0c0a6c0408e498
 - **Department**: Youth Programs
-- **Credential Status**: No credential in SafetyCulture
+- **Credential Status**: No credential in SafetyCulture (no credential seeded)
 - **Expected Behavior**: Should trigger compliance alerts for missing credential
 
-### 4. Michael Chen - VALID
-- **Email**: michaelc@murrumbidgee.nsw.gov.au
+### 4. Stephen Lockhart - VALID
+- **Email**: stephenl@murrumbidgee.nsw.gov.au
+- **User ID**: user_63e34a09823d424db6be9f92ba5b81d4
 - **Department**: Recreation
 - **Credential Status**: Valid (expiry date: 2026-12-31 - far future)
 - **Expected Behavior**: Should show as compliant, no alerts
 
-### 5. Emma Wilson - NOT_APPROVED
-- **Email**: emmaw@murrumbidgee.nsw.gov.au
+### 5. Steve Goodsall - NOT_APPROVED
+- **Email**: steveg@murrumbidgee.nsw.gov.au
+- **User ID**: user_c1f017bccd144000ac5324fec0613fe4
 - **Department**: Education
 - **Credential Status**: Exists but pending approval
 - **Expected Behavior**: Should trigger compliance alerts for unapproved credential
