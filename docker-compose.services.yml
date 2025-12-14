@@ -46,6 +46,19 @@ services:
       - sc-poller
       - wwcc-transformer
 
+  compliance-notification-router:
+    build:
+      context: ./services/compliance-notification-router
+      dockerfile: Dockerfile
+    container_name: compliance-notification-router
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    networks:
+      - default
+    restart: unless-stopped
+    depends_on:
+      - wwcc-compliance-monitor
+
 networks:
   default:
     name: council-kafka-platform_kafka-network

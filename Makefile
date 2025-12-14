@@ -7,7 +7,7 @@ endif
 export DOCKER_BUILDKIT=1
 
 # Service names
-SERVICES = sc-poller wwcc-transformer wwcc-compliance-monitor
+SERVICES = sc-poller wwcc-transformer wwcc-compliance-monitor compliance-notification-router
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
 KAFKA_CONTAINER = kafka
@@ -30,6 +30,7 @@ TOPICS = \
 	sc-poller-build sc-poller-up sc-poller-down sc-poller-restart sc-poller-logs sc-poller-rebuild \
 	wwcc-transformer-build wwcc-transformer-up wwcc-transformer-down wwcc-transformer-restart wwcc-transformer-logs wwcc-transformer-rebuild \
 	wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-down wwcc-compliance-monitor-restart wwcc-compliance-monitor-logs wwcc-compliance-monitor-rebuild \
+	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-rules seed-all rebuild-all \
 	status health logs watch \
@@ -219,6 +220,27 @@ wwcc-compliance-monitor-logs:
 	@docker-compose -f $(SERVICES_FILE) logs -f wwcc-compliance-monitor
 
 wwcc-compliance-monitor-rebuild: wwcc-compliance-monitor-build wwcc-compliance-monitor-up
+
+# compliance-notification-router
+compliance-notification-router-build:
+	@echo "🔨 Building compliance-notification-router..."
+	@docker-compose -f $(SERVICES_FILE) build compliance-notification-router
+	@echo "✅ compliance-notification-router built"
+
+compliance-notification-router-up:
+	@echo "🚀 Starting compliance-notification-router..."
+	@docker-compose -f $(SERVICES_FILE) up -d compliance-notification-router
+	@echo "✅ compliance-notification-router started"
+
+compliance-notification-router-down:
+	@docker-compose -f $(SERVICES_FILE) stop compliance-notification-router
+
+compliance-notification-router-restart: compliance-notification-router-down compliance-notification-router-up
+
+compliance-notification-router-logs:
+	@docker-compose -f $(SERVICES_FILE) logs -f compliance-notification-router
+
+compliance-notification-router-rebuild: compliance-notification-router-build compliance-notification-router-up
 
 # ============================================================================
 # Kafka Topics
