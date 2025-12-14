@@ -10,7 +10,8 @@ import io.circe.parser._
 import io.circe.syntax._
 import scala.collection.mutable
 import org.apache.kafka.common.TopicPartition
-
+import redis.clients.jedis.{Jedis, JedisPool}
+import java.security.MessageDigest
 
 // Input models from processed.wwcc.status
 case class WwccCompliance(
@@ -27,7 +28,7 @@ case class WwccCompliance(
   daysSinceStart: Option[Long],
   safetyculture_status: String,
   approval_status: String,
-  compliance_status: String,  // COMPLIANT, EXPIRED, EXPIRING, NOT_APPROVED, MISSING, NOT_STARTED, UNEXPECTED
+  compliance_status: String,
   flags: List[String],
   processedAt: String
 )
@@ -43,17 +44,17 @@ case class ComplianceRule(
 )
 
 case class RuleConditions(
-  compliance_statuses: Option[List[String]],  // List of statuses that trigger this rule
-  flags_any: Option[List[String]],           // Trigger if ANY of these flags present
-  flags_all: Option[List[String]],           // Trigger if ALL of these flags present
-  days_until_expiry_less_than: Option[Int],  // Trigger if expiry within X days
-  days_since_start_greater_than: Option[Int] // Trigger if started more than X days ago
+  compliance_statuses: Option[List[String]],
+  flags_any: Option[List[String]],
+  flags_all: Option[List[String]],
+  days_until_expiry_less_than: Option[Int],
+  days_since_start_greater_than: Option[Int]
 )
 
 case class NotificationConfig(
-  priority: String,      // HIGH, MEDIUM, LOW
-  issue_type: String,    // EXPIRED, EXPIRING_SOON, MISSING, NOT_APPROVED, etc.
-  template: String,      // Email template to use
+  priority: String,
+  issue_type: String,
+  template: String,
   notify_employee: Boolean,
   notify_manager: Boolean,
   notify_compliance_team: Boolean
@@ -89,25 +90,35 @@ case class ComplianceIssue(
 
 object ComplianceMonitorService {
   
+  def md5Hash(text: String): String = {
+    val md = MessageDigest.getInstance("MD5")
+    md.digest(text.getBytes).map("%02x".format(_)).mkString
+  }
+  
+  def getNotificationWindow(priority: String): Int = {
+    priority match {
+      case "HIGH" => 86400      // 24 hours for high priority
+      case "MEDIUM" => 259200   // 3 days for medium priority  
+      case "LOW" => 604800      // 7 days for low priority
+      case _ => 86400           // Default 24 hours
+    }
+  }
+  
   def main(args: Array[String]): Unit = {
     val kafkaBootstrap = sys.env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    val redisHost = sys.env.getOrElse("REDIS_HOST", "redis")
     
     println("[INFO] Compliance Monitor Service Starting")
     println(s"[INFO] Kafka: $kafkaBootstrap")
+    println(s"[INFO] Redis: $redisHost:6379")
     
-    // Rules consumer (reads the entire topic from beginning each time to get latest config)
-    val rulesConsumerProps = new Properties()
-    rulesConsumerProps.put("bootstrap.servers", kafkaBootstrap)
-    rulesConsumerProps.put("group.id", s"compliance-monitor-rules-${java.util.UUID.randomUUID()}")
-    rulesConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    rulesConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    rulesConsumerProps.put("auto.offset.reset", "earliest")
-    rulesConsumerProps.put("enable.auto.commit", "false")
+    // Redis connection
+    val jedisPool = new JedisPool(redisHost, 6379)
     
     // Status consumer
     val statusConsumerProps = new Properties()
     statusConsumerProps.put("bootstrap.servers", kafkaBootstrap)
-    statusConsumerProps.put("group.id", "compliance-monitor-v1")
+    statusConsumerProps.put("group.id", "compliance-monitor-v2")
     statusConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     statusConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     statusConsumerProps.put("auto.offset.reset", "earliest")
@@ -127,7 +138,6 @@ object ComplianceMonitorService {
     
     // State tracking
     var currentRules: Option[ComplianceRulesConfig] = None
-    val processedIssues = mutable.Map[String, String]() // userId -> last issue hash
     var lastRuleCheck = System.currentTimeMillis()
     
     println("[INFO] Service ready, waiting for compliance rules...")
@@ -162,18 +172,19 @@ object ComplianceMonitorService {
           val rulesConfig = currentRules.get
           
           records.asScala.foreach { record =>
+            val jedis = jedisPool.getResource
             try {
               decode[WwccCompliance](record.value()) match {
                 case Right(compliance) =>
                   // Check each active rule
                   rulesConfig.rules.filter(_.enabled).foreach { rule =>
                     if (evaluateRule(compliance, rule)) {
-                      val issueHash = s"${compliance.userId}-${rule.ruleId}-${compliance.compliance_status}"
+                      // Create a unique key for this issue type and user
+                      val issueKey = s"issue:${rule.ruleId}:${compliance.userId}"
+                      val notificationWindow = getNotificationWindow(rule.notification.priority)
                       
-                      // Only create issue if status changed or not seen before
-                      if (!processedIssues.contains(compliance.userId) || 
-                          processedIssues(compliance.userId) != issueHash) {
-                        
+                      // Check if we've already raised this issue recently
+                      if (!jedis.exists(issueKey)) {
                         val issue = createComplianceIssue(compliance, rule)
                         
                         producer.send(new ProducerRecord[String, String](
@@ -182,27 +193,42 @@ object ComplianceMonitorService {
                           issue.asJson.noSpaces
                         ))
                         
-                        processedIssues(compliance.userId) = issueHash
+                        // Mark this issue as raised with appropriate TTL based on priority
+                        jedis.setex(issueKey, notificationWindow, issue.issueId)
                         
                         println(s"[INFO] Compliance issue detected: ${compliance.firstName} ${compliance.lastName}")
                         println(s"      Rule: ${rule.name}")
                         println(s"      Type: ${issue.issueType} (${issue.severity})")
                         println(s"      Status: ${compliance.compliance_status}")
+                        println(s"      Next notification allowed in: ${notificationWindow/3600} hours")
                         if (compliance.flags.nonEmpty) {
                           println(s"      Flags: ${compliance.flags.mkString(", ")}")
+                        }
+                      } else {
+                        // Issue already raised recently
+                        val ttl = jedis.ttl(issueKey)
+                        if (ttl > 0) {
+                          println(s"[DEBUG] Skipping duplicate issue for ${compliance.userId} - ${rule.name} (${ttl/3600}h remaining)")
                         }
                       }
                     }
                   }
                   
+                  // Store last seen compliance state for this user
+                  val complianceStateKey = s"compliance:state:${compliance.userId}"
+                  jedis.setex(complianceStateKey, 86400, compliance.asJson.noSpaces)
+                  
                 case Left(e) =>
                   println(s"[WARN] Failed to parse compliance record: ${e.getMessage}")
               }
+              
             } catch {
               case e: Exception =>
                 println(s"[ERROR] Error processing compliance record: ${e.getMessage}")
+            } finally {
+              jedis.close()
             }
-          }
+          } 
         } else if (currentRules.isEmpty && !records.isEmpty) {
           println("[WARN] Received status updates but no compliance rules configured")
         }
@@ -213,8 +239,8 @@ object ComplianceMonitorService {
           e.printStackTrace()
           Thread.sleep(5000)
       }
-    }
-  }
+    } 
+  } 
   
   def loadLatestRules(kafkaBootstrap: String): Option[ComplianceRulesConfig] = {
     val props = new Properties()
@@ -228,41 +254,33 @@ object ComplianceMonitorService {
     val consumer = new KafkaConsumer[String, String](props)
     
     try {
-      // Get partition info
       val partitions = consumer.partitionsFor("reference.compliance.rules")
       if (partitions.isEmpty) {
         println("[WARN] No partitions found for reference.compliance.rules topic")
         return None
       }
       
-      // Assign to partition 0
       val topicPartition = new org.apache.kafka.common.TopicPartition("reference.compliance.rules", 0)
       consumer.assign(java.util.Arrays.asList(topicPartition))
-      
-      // Seek to beginning to read all messages
       consumer.seekToBeginning(java.util.Arrays.asList(topicPartition))
       
       var latestRules: Option[ComplianceRulesConfig] = None
       var keepPolling = true
       
-      // Read ALL messages and keep only the last valid one
       while (keepPolling) {
         val records = consumer.poll(Duration.ofMillis(1000))
         
         if (records.isEmpty) {
           keepPolling = false
         } else {
-          // Process all records, keeping only successfully parsed ones
           records.asScala.foreach { record =>
             val value = record.value()
-            // Skip empty or very short messages (the broken ones)
             if (value != null && value.trim.length > 10) {
               decode[ComplianceRulesConfig](value) match {
                 case Right(rules) => 
                   latestRules = Some(rules)
-                  println(s"[INFO] Loaded rules from offset ${record.offset()}")
+                  println(s"[DEBUG] Loaded rules from offset ${record.offset()}")
                 case Left(e) =>
-                  // Skip broken messages silently unless they look like they should be valid
                   if (value.contains("rules") && value.length > 100) {
                     println(s"[WARN] Failed to parse rules at offset ${record.offset()}: ${e.getMessage.take(100)}")
                   }
@@ -291,45 +309,29 @@ object ComplianceMonitorService {
     }
   }
   
-  def createRulesConsumerProps(kafkaBootstrap: String): Properties = {
-    val props = new Properties()
-    props.put("bootstrap.servers", kafkaBootstrap)
-    props.put("group.id", s"compliance-monitor-rules-temp-${java.util.UUID.randomUUID()}")
-    props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
-    props.put("auto.offset.reset", "earliest")
-    props.put("enable.auto.commit", "false")
-    props
-  }
-  
   def evaluateRule(compliance: WwccCompliance, rule: ComplianceRule): Boolean = {
     val conditions = rule.conditions
     
-    // Check compliance status
     val statusMatch = conditions.compliance_statuses match {
       case Some(statuses) => statuses.contains(compliance.compliance_status)
       case None => true
     }
     
-    // Check flags (ANY)
     val flagsAnyMatch = conditions.flags_any match {
       case Some(requiredFlags) => requiredFlags.exists(compliance.flags.contains)
       case None => true
     }
     
-    // Check flags (ALL)
     val flagsAllMatch = conditions.flags_all match {
       case Some(requiredFlags) => requiredFlags.forall(compliance.flags.contains)
       case None => true
     }
     
-    // Check days until expiry
     val expiryMatch = conditions.days_until_expiry_less_than match {
       case Some(days) => compliance.daysUntilExpiry.exists(_ < days)
       case None => true
     }
     
-    // Check days since start
     val startMatch = conditions.days_since_start_greater_than match {
       case Some(days) => compliance.daysSinceStart.exists(_ > days)
       case None => true

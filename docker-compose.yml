@@ -9,9 +9,14 @@ services:
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
-      - "8080:8080"  # Traefik dashboard
+      - "8080:8080"  # Traefik dashboard (direct access)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.entrypoints=web"
     networks:
       - kafka-network
 
@@ -65,6 +70,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -139,6 +145,10 @@ services:
     user: root
     volumes:
       - loki_data:/loki
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.loki.rule=Host(`loki.localhost`)"
+      - "traefik.http.services.loki.loadbalancer.server.port=3100"
     networks:
       - kafka-network
 
@@ -160,9 +170,15 @@ services:
     container_name: kafka-exporter
     command:
       - '--kafka.server=kafka:29092'
+    ports:
+      - "9308:9308"  # Direct port access for metrics
     depends_on:
       kafka:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kafka-exporter.rule=Host(`kafka-exporter.localhost`)"
+      - "traefik.http.services.kafka-exporter.loadbalancer.server.port=9308"
     networks:
       - kafka-network
 
@@ -171,9 +187,15 @@ services:
     container_name: postgres-exporter
     environment:
       DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "9187:9187"  # Direct port access for metrics
     depends_on:
       postgres:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.postgres-exporter.rule=Host(`postgres-exporter.localhost`)"
+      - "traefik.http.services.postgres-exporter.loadbalancer.server.port=9187"
     networks:
       - kafka-network
 
@@ -200,9 +222,15 @@ services:
     container_name: redis-exporter
     command:
       - '--redis.addr=redis:6379'
+    ports:
+      - "9121:9121"  # Direct port access for metrics
     depends_on:
       redis:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis-exporter.rule=Host(`redis-exporter.localhost`)"
+      - "traefik.http.services.redis-exporter.loadbalancer.server.port=9121"
     networks:
       - kafka-network
 

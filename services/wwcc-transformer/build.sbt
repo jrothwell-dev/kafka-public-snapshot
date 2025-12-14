@@ -10,5 +10,8 @@ libraryDependencies ++= Seq(
   "ch.qos.logback" % "logback-classic" % "1.4.11",
   "io.circe" %% "circe-core" % "0.14.6",
   "io.circe" %% "circe-generic" % "0.14.6",
-  "io.circe" %% "circe-parser" % "0.14.6"
+  "io.circe" %% "circe-parser" % "0.14.6",
+  
+  // Redis for deduplication
+  "redis.clients" % "jedis" % "5.0.0"
 )

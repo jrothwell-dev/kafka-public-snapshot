@@ -16,5 +16,7 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser" % "0.14.6",
   
   // PureConfig for type-safe configuration
-  "com.github.pureconfig" %% "pureconfig" % "0.17.4"
+  "com.github.pureconfig" %% "pureconfig" % "0.17.4",
+
+  "redis.clients" % "jedis" % "5.0.0"
 )

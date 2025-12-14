@@ -10,6 +10,8 @@ import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
 import scala.collection.mutable
+import redis.clients.jedis.{Jedis, JedisPool}
+import java.security.MessageDigest
 
 // Input models
 case class RequiredUser(
@@ -72,16 +74,26 @@ case class WwccCompliance(
 
 object WwccTransformerService {
   
+  def md5Hash(text: String): String = {
+    val md = MessageDigest.getInstance("MD5")
+    md.digest(text.getBytes).map("%02x".format(_)).mkString
+  }
+  
   def main(args: Array[String]): Unit = {
     val kafkaBootstrap = sys.env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+    val redisHost = sys.env.getOrElse("REDIS_HOST", "redis")
     
     println("[INFO] WWCC Transformer Service Starting")
-    println("[INFO] Consumer group: wwcc-transformer-v3")  // New group name
+    println("[INFO] Consumer group: wwcc-transformer-v4")
+    println(s"[INFO] Redis: $redisHost:6379")
+    
+    // Redis connection
+    val jedisPool = new JedisPool(redisHost, 6379)
     
     // Required users consumer
     val requiredConsumerProps = new Properties()
     requiredConsumerProps.put("bootstrap.servers", kafkaBootstrap)
-    requiredConsumerProps.put("group.id", "wwcc-transformer-required-v1")
+    requiredConsumerProps.put("group.id", "wwcc-transformer-required-v2")
     requiredConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     requiredConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     requiredConsumerProps.put("auto.offset.reset", "earliest")
@@ -93,7 +105,7 @@ object WwccTransformerService {
     // Credentials consumer
     val credentialConsumerProps = new Properties()
     credentialConsumerProps.put("bootstrap.servers", kafkaBootstrap)
-    credentialConsumerProps.put("group.id", "wwcc-transformer-v3")
+    credentialConsumerProps.put("group.id", "wwcc-transformer-v5")
     credentialConsumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     credentialConsumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer")
     credentialConsumerProps.put("auto.offset.reset", "earliest")
@@ -112,14 +124,14 @@ object WwccTransformerService {
     
     // State tracking
     var currentRequiredUsers: Map[String, RequiredUser] = Map.empty
+    val knownCredentials = mutable.Set[String]()
     var lastRequiredUpdate: Option[String] = None
-    val userCredentials = mutable.Map[String, Credential]()
-    val processedMissingUsers = mutable.Set[String]()
     var lastMissingCheck = System.currentTimeMillis()
     
     println("[INFO] Service ready, processing messages...")
     
     while (true) {
+      val jedis = jedisPool.getResource
       try {
         // Read required users
         val requiredRecords = requiredConsumer.poll(Duration.ofMillis(100))
@@ -127,15 +139,21 @@ object WwccTransformerService {
           try {
             decode[RequiredUsersList](record.value()) match {
               case Right(usersList) => 
-                // Replace the entire required users map with the new list
                 currentRequiredUsers = usersList.requiredUsers.map { user =>
                   s"${user.firstName.toLowerCase}_${user.lastName.toLowerCase}" -> user
                 }.toMap
                 lastRequiredUpdate = Some(usersList.timestamp)
-                println(s"[INFO] Updated required users list: ${usersList.requiredUsers.size} users (timestamp: ${usersList.timestamp})")
-                usersList.requiredUsers.foreach { u =>
-                  println(s"  - ${u.firstName} ${u.lastName} (${u.email})")
+                println(s"[INFO] Updated required users list: ${usersList.requiredUsers.size} users")
+                
+                // Clear known credentials to force re-check of all users
+                knownCredentials.clear()
+                
+                // Clear missing user tracking when list updates
+                val keysToDelete = jedis.keys("wwcc:missing:*")
+                if (!keysToDelete.isEmpty) {
+                  jedis.del(keysToDelete.toArray(new Array[String](keysToDelete.size)): _*)
                 }
+                
               case Left(e) => 
                 println(s"[WARN] Failed to parse required users list: ${e.getMessage.take(200)}")
             }
@@ -152,7 +170,6 @@ object WwccTransformerService {
             decode[CredentialMessage](record.value()) match {
               case Right(msg) =>
                 val cred = msg.credential
-                userCredentials(cred.subject_user_id) = cred
                 
                 // Try multiple matching strategies
                 val matchedUser = findMatchingUser(cred, currentRequiredUsers.values.toList)
@@ -175,7 +192,7 @@ object WwccTransformerService {
                 // Determine compliance status and flags
                 val complianceStatus = if (matchedUser.isEmpty) {
                   flags += "NOT_IN_REQUIRED_LIST"
-                  "UNEXPECTED"  // Found WWCC but not in required list
+                  "UNEXPECTED"
                 } else if (cred.metadata.approval.status != "DOCUMENT_APPROVAL_STATUS_APPROVED") {
                   flags += "APPROVAL_PENDING"
                   "NOT_APPROVED"
@@ -218,13 +235,25 @@ object WwccTransformerService {
                   processedAt = Instant.now().toString
                 )
                 
-                producer.send(new ProducerRecord[String, String](
-                  "processed.wwcc.status",
-                  cred.subject_user_id,
-                  compliance.asJson.noSpaces
-                ))
+                // Check if this compliance status has changed
+                val complianceHash = md5Hash(compliance.asJson.noSpaces)
+                val redisKey = s"wwcc:compliance:${cred.subject_user_id}"
+                val lastHash = jedis.get(redisKey)
                 
-                println(s"[INFO] Processed: ${cred.subject_user.first_name} ${cred.subject_user.last_name} - $complianceStatus ${if (flags.nonEmpty) s"[${flags.mkString(", ")}]" else ""}")
+                if (lastHash == null || lastHash != complianceHash) {
+                  producer.send(new ProducerRecord[String, String](
+                    "processed.wwcc.status",
+                    cred.subject_user_id,
+                    compliance.asJson.noSpaces
+                  ))
+                  
+                  // Store hash with 24 hour expiry
+                  jedis.setex(redisKey, 86400, complianceHash)
+                  
+                  println(s"[INFO] Processed: ${cred.subject_user.first_name} ${cred.subject_user.last_name} - $complianceStatus")
+                  val userKey = s"${cred.subject_user.first_name.toLowerCase}_${cred.subject_user.last_name.toLowerCase}"
+                  knownCredentials.add(userKey)
+                }
                 
               case Left(e) => 
                 println(s"[WARN] Skipping malformed credential record: ${e.getMessage.take(100)}")
@@ -235,20 +264,22 @@ object WwccTransformerService {
           }
         }
         
-        // Check for missing WWCCs periodically (every 30 seconds)
-        if (System.currentTimeMillis() - lastMissingCheck > 30000) {
+        // Check for missing WWCCs periodically (every 60 seconds)
+        if (System.currentTimeMillis() - lastMissingCheck > 60000) {
           if (currentRequiredUsers.nonEmpty) {
-            checkMissingWwcc(currentRequiredUsers, userCredentials, producer, processedMissingUsers)
+            checkMissingWwcc(currentRequiredUsers, jedisPool, producer, knownCredentials)
             lastMissingCheck = System.currentTimeMillis()
           }
         }
         
-        Thread.sleep(1000) // Check every second
+        Thread.sleep(1000)
         
       } catch {
         case e: Exception =>
           println(s"[ERROR] Unexpected error in main loop: ${e.getMessage}")
-          Thread.sleep(5000) // Wait before retrying
+          Thread.sleep(5000)
+      } finally {
+        jedis.close()
       }
     }
   }
@@ -265,64 +296,82 @@ object WwccTransformerService {
   
   def checkMissingWwcc(
     requiredUsers: Map[String, RequiredUser],
-    userCredentials: mutable.Map[String, Credential],
+    jedisPool: JedisPool,
     producer: KafkaProducer[String, String],
-    processedMissing: mutable.Set[String]
+    knownCredentials: mutable.Set[String]
   ): Unit = {
-    requiredUsers.foreach { case (userKey, user) =>  // userKey is "firstname_lastname"
-      if (!processedMissing.contains(userKey)) {
-        val hasCredential = userCredentials.values.exists { cred =>
-          val credFirstName = cred.subject_user.first_name.toLowerCase.trim
-          val credLastName = cred.subject_user.last_name.toLowerCase.trim
-          
-          // Check by actual names
-          user.firstName.toLowerCase.trim == credFirstName && 
-          user.lastName.toLowerCase.trim == credLastName
-        }
+    val jedis = jedisPool.getResource
+    try {
+      requiredUsers.foreach { case (userKey, user) =>
+        // Skip if user doesn't require WWCC
+        if (!user.requiresWwcc) {
+          // Continue to next user
+        } else {
+          val missingKey = s"wwcc:missing:${user.email}"
         
-        if (!hasCredential) {
-          val startDays = try {
-            Some(ChronoUnit.DAYS.between(LocalDate.parse(user.startDate), LocalDate.now()))
-          } catch { case _: Exception => None }
+        // Only process if not recently processed (24 hour window)
+        if (!jedis.exists(missingKey)) {
+          // Check if we have a credential for this user
+          val hasCredential = knownCredentials.contains(userKey)
           
-          val flags = mutable.ListBuffer[String]("NO_CREDENTIAL_FOUND")
-          val complianceStatus = if (startDays.exists(_ < 0)) {
-            flags += "NOT_YET_STARTED"
-            "NOT_STARTED"
-          } else {
-            flags += "MISSING_REQUIRED_WWCC"
-            "MISSING"
+          if (!hasCredential) {
+            // Calculate days since start date
+            val startDays = try {
+              Some(ChronoUnit.DAYS.between(LocalDate.parse(user.startDate), LocalDate.now()))
+            } catch {
+              case _: Exception => None
+            }
+            
+            // Create a synthetic user ID based on email hash for missing users
+            val userId = md5Hash(user.email).take(16)
+            
+            // Create MISSING compliance record
+            val compliance = WwccCompliance(
+              userId = userId,
+              firstName = user.firstName,
+              lastName = user.lastName,
+              email = Some(user.email),
+              department = Some(user.department),
+              position = Some(user.position),
+              startDate = Some(user.startDate),
+              wwccNumber = None,
+              expiryDate = None,
+              daysUntilExpiry = None,
+              daysSinceStart = startDays,
+              safetyculture_status = "EXPIRY_STATUS_UNKNOWN",
+              approval_status = "DOCUMENT_APPROVAL_STATUS_UNKNOWN",
+              compliance_status = "MISSING",
+              flags = List("NO_CREDENTIAL_FOUND", "MISSING_REQUIRED_WWCC"),
+              processedAt = Instant.now().toString
+            )
+            
+            // Check if this compliance status has changed
+            val complianceHash = md5Hash(compliance.asJson.noSpaces)
+            val complianceRedisKey = s"wwcc:compliance:${userId}"
+            val lastHash = jedis.get(complianceRedisKey)
+            
+            if (lastHash == null || lastHash != complianceHash) {
+              producer.send(new ProducerRecord[String, String](
+                "processed.wwcc.status",
+                userId,
+                compliance.asJson.noSpaces
+              ))
+              
+              // Store hash with 24 hour expiry
+              jedis.setex(complianceRedisKey, 86400, complianceHash)
+              
+              // Mark as processed to prevent duplicate checks for 24 hours
+              jedis.setex(missingKey, 86400, "processed")
+              
+              println(s"[INFO] Missing WWCC detected: ${user.firstName} ${user.lastName} (${user.email})")
+            }
           }
-          
-          val compliance = WwccCompliance(
-            userId = user.email,  // Use email as userId for missing records
-            firstName = user.firstName,
-            lastName = user.lastName,
-            email = Some(user.email),
-            department = Some(user.department),
-            position = Some(user.position),
-            startDate = Some(user.startDate),
-            wwccNumber = None,
-            expiryDate = None,
-            daysUntilExpiry = None,
-            daysSinceStart = startDays,
-            safetyculture_status = "MISSING",
-            approval_status = "MISSING",
-            compliance_status = complianceStatus,
-            flags = flags.toList,
-            processedAt = Instant.now().toString
-          )
-          
-          producer.send(new ProducerRecord[String, String](
-            "processed.wwcc.status",
-            user.email,  // Use email as the Kafka key
-            compliance.asJson.noSpaces
-          ))
-          
-          processedMissing += userKey  // Track by userKey to prevent reprocessing
-          println(s"[INFO] Flagged missing WWCC: ${user.email} (${user.firstName} ${user.lastName}) - $complianceStatus [${flags.mkString(", ")}]")
+        }
         }
       }
+      producer.flush()
+    } finally {
+      jedis.close()
     }
   }
 }

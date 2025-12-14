@@ -9,6 +9,7 @@ services:
       SAFETYCULTURE_API_TOKEN: ${SAFETYCULTURE_API_TOKEN}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POLL_INTERVAL: ${POLL_INTERVAL:-300}
+      REDIS_HOST: redis
     networks:
       - default
     restart: unless-stopped
@@ -25,6 +26,7 @@ services:
     container_name: wwcc-transformer
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
     networks:
       - default
     restart: unless-stopped
@@ -36,6 +38,7 @@ services:
     container_name: wwcc-compliance-monitor
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
     networks:
       - default
     restart: unless-stopped

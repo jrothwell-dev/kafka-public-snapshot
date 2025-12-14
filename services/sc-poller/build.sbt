@@ -20,5 +20,8 @@ libraryDependencies ++= Seq(
   "com.softwaremill.sttp.client3" %% "circe" % "3.9.1",
   
   // PureConfig for type-safe configuration
-  "com.github.pureconfig" %% "pureconfig" % "0.17.4"
-)
+  "com.github.pureconfig" %% "pureconfig" % "0.17.4",
+  
+  // Redis for deduplication
+  "redis.clients" % "jedis" % "5.0.0"
+) 
