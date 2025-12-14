@@ -38,3 +38,7 @@ zookeeper_log/
 config/prometheus_data/
 config/grafana_data/
 config/loki_data/
+
+# Detailed architecture docs (local working docs)
+docs/ARCHITECTURE_REVIEW.md
+docs/ARCHITECTURE_FIXES.md
