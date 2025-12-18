@@ -3,12 +3,22 @@
   "tags": ["wwcc", "kafka", "pipeline"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "panels": [
     {
       "id": 1,
-      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "type": "text",
+      "title": "Pipeline Flow",
+      "options": {
+        "content": "## Pipeline Flow\n\n**safetyculture-poller** → `raw.safetyculture.credentials` → **wwcc-transformer** → `processed.wwcc.status` → **notification-router** → `commands.notifications`\n\n*Data flows from left to right through the pipeline*",
+        "mode": "markdown"
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 3},
       "type": "stat",
       "title": "raw.safetyculture.credentials",
       "datasource": {"type": "prometheus"},
@@ -35,8 +45,8 @@
       }
     },
     {
-      "id": 2,
-      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 3,
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 3},
       "type": "stat",
       "title": "processed.wwcc.status",
       "datasource": {"type": "prometheus"},
@@ -63,36 +73,8 @@
       }
     },
     {
-      "id": 3,
-      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
-      "type": "stat",
-      "title": "events.compliance.issues",
-      "datasource": {"type": "prometheus"},
-      "targets": [
-        {
-          "expr": "sum(kafka_topic_partition_current_offset{topic=\"events.compliance.issues\"})",
-          "refId": "A",
-          "datasource": {"type": "prometheus"}
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "color": {"mode": "thresholds"},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {"value": null, "color": "red"},
-              {"value": 0, "color": "red"},
-              {"value": 1, "color": "green"}
-            ]
-          },
-          "unit": "short"
-        }
-      }
-    },
-    {
       "id": 4,
-      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 3},
       "type": "stat",
       "title": "commands.notifications",
       "datasource": {"type": "prometheus"},
@@ -120,15 +102,61 @@
     },
     {
       "id": 5,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
-      "type": "timeseries",
-      "title": "Consumer Group Lag",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 3},
+      "type": "stat",
+      "title": "events.notifications.sent",
       "datasource": {"type": "prometheus"},
       "targets": [
         {
-          "expr": "kafka_consumer_lag_sum",
+          "expr": "sum(kafka_topic_partition_current_offset{topic=\"events.notifications.sent\"})",
           "refId": "A",
-          "legendFormat": "{{consumer_group}}",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          },
+          "unit": "short"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 7},
+      "type": "timeseries",
+      "title": "Message Flow Rate (messages per minute)",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"raw.safetyculture.credentials\"}[1m]) * 60",
+          "refId": "A",
+          "legendFormat": "raw.safetyculture.credentials",
+          "datasource": {"type": "prometheus"}
+        },
+        {
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"processed.wwcc.status\"}[1m]) * 60",
+          "refId": "B",
+          "legendFormat": "processed.wwcc.status",
+          "datasource": {"type": "prometheus"}
+        },
+        {
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"commands.notifications\"}[1m]) * 60",
+          "refId": "C",
+          "legendFormat": "commands.notifications",
+          "datasource": {"type": "prometheus"}
+        },
+        {
+          "expr": "rate(kafka_topic_partition_current_offset{topic=\"events.notifications.sent\"}[1m]) * 60",
+          "refId": "D",
+          "legendFormat": "events.notifications.sent",
           "datasource": {"type": "prometheus"}
         }
       ],
@@ -154,36 +182,155 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"value": null, "color": "green"},
-              {"value": 10, "color": "yellow"},
-              {"value": 100, "color": "red"}
+              {"value": null, "color": "green"}
             ]
           },
-          "unit": "short"
+          "unit": "msg/min"
         }
       }
     },
     {
-      "id": 6,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
-      "type": "table",
-      "title": "Service Container Status",
+      "id": 7,
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 15},
+      "type": "gauge",
+      "title": "safetyculture-poller Lag",
       "datasource": {"type": "prometheus"},
       "targets": [
         {
-          "expr": "up{job=~\"kafka-exporter|postgres-exporter|redis-exporter\"}",
+          "expr": "sum(kafka_consumergroup_lag_sum{consumer_group=~\"wwcc-transformer.*\"})",
           "refId": "A",
-          "format": "table",
-          "instant": true,
           "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "auto",
-            "displayMode": "auto"
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 0, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 100, "color": "red"}
+            ]
           },
+          "max": 200,
+          "min": 0,
+          "unit": "short"
+        }
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      }
+    },
+    {
+      "id": 8,
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 15},
+      "type": "gauge",
+      "title": "wwcc-transformer Lag",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(kafka_consumergroup_lag_sum{consumer_group=~\"wwcc-transformer.*\"})",
+          "refId": "A",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 0, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 100, "color": "red"}
+            ]
+          },
+          "max": 200,
+          "min": 0,
+          "unit": "short"
+        }
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      }
+    },
+    {
+      "id": 9,
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 15},
+      "type": "gauge",
+      "title": "notification-router Lag",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "sum(kafka_consumergroup_lag_sum{consumer_group=~\"notification-router.*\"})",
+          "refId": "A",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "green"},
+              {"value": 0, "color": "green"},
+              {"value": 10, "color": "yellow"},
+              {"value": 100, "color": "red"}
+            ]
+          },
+          "max": 200,
+          "min": 0,
+          "unit": "short"
+        }
+      },
+      "options": {
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      }
+    },
+    {
+      "id": 10,
+      "gridPos": {"h": 4, "w": 8, "x": 0, "y": 19},
+      "type": "stat",
+      "title": "safetyculture-poller",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "count(kafka_consumergroup_members{consumer_group=~\"wwcc-transformer.*\"}) > 0",
+          "refId": "A",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
           "mappings": [
             {
               "options": {
@@ -192,32 +339,158 @@
               },
               "type": "value"
             }
-          ]
-        },
-        "overrides": []
-      },
-      "transformations": [
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true
-            },
-            "indexByName": {},
-            "renameByName": {
-              "job": "Service",
-              "Value": "Status"
-            }
-          }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          },
+          "unit": "none"
         }
-      ]
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "textMode": "auto"
+      }
     },
     {
-      "id": 7,
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+      "id": 11,
+      "gridPos": {"h": 4, "w": 8, "x": 8, "y": 19},
+      "type": "stat",
+      "title": "wwcc-transformer",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "count(kafka_consumergroup_members{consumer_group=~\"wwcc-transformer.*\"}) > 0",
+          "refId": "A",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {
+              "options": {
+                "0": {"text": "DOWN", "color": "red"},
+                "1": {"text": "UP", "color": "green"}
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "gridPos": {"h": 4, "w": 8, "x": 16, "y": 19},
+      "type": "stat",
+      "title": "notification-router",
+      "datasource": {"type": "prometheus"},
+      "targets": [
+        {
+          "expr": "count(kafka_consumergroup_members{consumer_group=~\"notification-router.*\"}) > 0",
+          "refId": "A",
+          "datasource": {"type": "prometheus"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {
+              "options": {
+                "0": {"text": "DOWN", "color": "red"},
+                "1": {"text": "UP", "color": "green"}
+              },
+              "type": "value"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"value": null, "color": "red"},
+              {"value": 0, "color": "red"},
+              {"value": 1, "color": "green"}
+            ]
+          },
+          "unit": "none"
+        }
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 13,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 23},
       "type": "logs",
-      "title": "Recent Log Entries",
+      "title": "Recent Errors",
+      "datasource": {"type": "loki"},
+      "targets": [
+        {
+          "expr": "{container_name=~\"safetyculture-poller|wwcc-transformer|compliance-notification-router\"} |= \"ERROR\" or |= \"WARN\"",
+          "refId": "A",
+          "datasource": {"type": "loki"}
+        }
+      ],
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": false
+      }
+    },
+    {
+      "id": 14,
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 31},
+      "type": "logs",
+      "title": "Recent Activity",
       "datasource": {"type": "loki"},
       "targets": [
         {
