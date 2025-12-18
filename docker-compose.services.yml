@@ -45,6 +45,23 @@ services:
     depends_on:
       - wwcc-transformer
 
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
+      SMTP_HOST: ${SMTP_HOST:-smtp.murrumbidgee.nsw.gov.au}
+      SMTP_PORT: ${SMTP_PORT:-25}
+      SMTP_FROM: ${SMTP_FROM:-noreply@murrumbidgee.nsw.gov.au}
+    networks:
+      - default
+    restart: unless-stopped
+    depends_on:
+      - compliance-notification-router
+
 networks:
   default:
     name: council-kafka-platform_kafka-network

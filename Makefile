@@ -7,7 +7,7 @@ endif
 export DOCKER_BUILDKIT=1
 
 # Service names
-SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router
+SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router notification-service
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
 KAFKA_CONTAINER = kafka
@@ -30,6 +30,7 @@ TOPICS = \
 	safetyculture-poller-build safetyculture-poller-up safetyculture-poller-down safetyculture-poller-restart safetyculture-poller-logs safetyculture-poller-rebuild \
 	wwcc-transformer-build wwcc-transformer-up wwcc-transformer-down wwcc-transformer-restart wwcc-transformer-logs wwcc-transformer-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
+	notification-service-build notification-service-up notification-service-down notification-service-restart notification-service-logs notification-service-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
 	test-all test-integration validate test-reset test-seed test-verify test-full test-watch \
@@ -237,6 +238,27 @@ compliance-notification-router-logs:
 
 compliance-notification-router-rebuild: compliance-notification-router-build compliance-notification-router-up
 
+# notification-service
+notification-service-build:
+	@echo "🔨 Building notification-service..."
+	@docker-compose -f $(SERVICES_FILE) build notification-service
+	@echo "✅ notification-service built"
+
+notification-service-up:
+	@echo "🚀 Starting notification-service..."
+	@docker-compose -f $(SERVICES_FILE) up -d notification-service
+	@echo "✅ notification-service started"
+
+notification-service-down:
+	@docker-compose -f $(SERVICES_FILE) stop notification-service
+
+notification-service-restart: notification-service-down notification-service-up
+
+notification-service-logs:
+	@docker-compose -f $(SERVICES_FILE) logs -f notification-service
+
+notification-service-rebuild: notification-service-build notification-service-up
+
 # ============================================================================
 # Kafka Topics
 # ============================================================================
@@ -355,7 +377,7 @@ status:
 	@docker ps --format "  {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "(kafka|redis|postgres|zookeeper|grafana|prometheus|traefik|loki)" || echo "  None running"
 	@echo ""
 	@echo "🔧 Services:"
-	@docker ps --format "  {{.Names}}\t{{.Status}}" | grep -E "(safetyculture-poller|transformer|compliance)" || echo "  None running"
+	@docker ps --format "  {{.Names}}\t{{.Status}}" | grep -E "(safetyculture-poller|transformer|compliance|notification)" || echo "  None running"
 	@echo ""
 	@echo "🌐 Dashboards:"
 	@echo "  Kafka UI:   http://localhost:8081"
@@ -375,11 +397,12 @@ test-integration:
 validate:
 	@./scripts/validate-pipeline.sh
 
-test-reset:
+test-all:
 	@echo "Running all unit tests..."
 	@cd services/safetyculture-poller && sbt test
 	@cd services/wwcc-transformer && sbt test
 	@cd services/compliance-notification-router && sbt test
+	@cd services/notification-service && sbt test
 	@echo "✓ All tests passed"
 
 test-reset:
