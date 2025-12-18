@@ -32,7 +32,7 @@ TOPICS = \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	notification-service-build notification-service-up notification-service-down notification-service-restart notification-service-logs notification-service-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
-	seed seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
+	seed seed-all rebuild-all \
 	test-all test-integration validate test-reset test-seed test-verify test-full test-watch \
 	ci-test ci-build \
 	status health logs watch \
@@ -78,8 +78,6 @@ help:
 	@echo ""
 	@echo "🌱 Data Seeding:"
 	@echo "  make seed            - Seed required WWCC users"
-	@echo "  make seed-safetyculture - Push credentials to SafetyCulture API"
-	@echo "  make seed-safetyculture-debug - Push with debug output"
 	@echo "  make seed-all       - Seed all test data"
 	@echo ""
 	@echo "🧪 Testing Infrastructure:"
@@ -323,16 +321,6 @@ seed:
 	@echo '{"requiredUsers":[{"email":"jordanr@murrumbidgee.nsw.gov.au","firstName":"Jordan","lastName":"Rothwell","department":"IT Services","position":"Systems Administrator","requiresWwcc":true,"startDate":"2024-01-15"},{"email":"zackw@murrumbidgee.nsw.gov.au","firstName":"Zack","lastName":"Walsh","department":"Community Services","position":"Youth Worker","requiresWwcc":true,"startDate":"2024-03-01"},{"email":"sarahm@murrumbidgee.nsw.gov.au","firstName":"Sarah","lastName":"Mitchell","department":"Youth Programs","position":"Program Coordinator","requiresWwcc":true,"startDate":"2024-06-01"}],"timestamp":"'$$(date -Iseconds)'"}' | \
 		docker exec -i $(KAFKA_CONTAINER) kafka-console-producer --topic reference.wwcc.required --bootstrap-server $(KAFKA_BOOTSTRAP)
 	@echo "✅ Seeded required WWCC users list"
-
-seed-safetyculture:
-	@echo "🌱 Pushing credentials to SafetyCulture API..."
-	@./scripts/seed-safetyculture.sh
-	@echo "✅ SafetyCulture seeding complete"
-
-seed-safetyculture-debug:
-	@echo "🔍 Debug mode: Pushing credentials to SafetyCulture API..."
-	@./scripts/seed-safetyculture.sh --debug
-	@echo "✅ SafetyCulture seeding complete (debug mode)"
 
 seed-all: seed
 	@echo "✅ All test data seeded"

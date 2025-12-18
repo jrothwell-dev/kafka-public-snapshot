@@ -14,12 +14,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SEED_DATA_DIR="$PROJECT_ROOT/seed-data"
 
-# Parse arguments
-LOCAL_ONLY=false
-if [[ "$*" == *"--local-only"* ]]; then
-  LOCAL_ONLY=true
-fi
-
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║              Seeding Test Data                                 ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
@@ -29,29 +23,6 @@ echo ""
 if [ ! -d "$SEED_DATA_DIR" ]; then
   echo -e "${RED}❌ ERROR: seed-data directory not found at $SEED_DATA_DIR${NC}"
   exit 1
-fi
-
-# Step 0: Push to SafetyCulture API (if token available and not local-only)
-if [ "$LOCAL_ONLY" = false ] && [ -n "$SAFETYCULTURE_API_TOKEN" ]; then
-  echo -e "${YELLOW}[0/4] Pushing credentials to SafetyCulture API...${NC}"
-  echo ""
-  if "$SCRIPT_DIR/seed-safetyculture.sh"; then
-    echo -e "${GREEN}✓ SafetyCulture API seeding complete${NC}"
-    echo ""
-    echo -e "${BLUE}Note: Credentials pushed to SafetyCulture. safetyculture-poller will pick them up.${NC}"
-    echo -e "${BLUE}      Continuing with Kafka seeding for reference data...${NC}"
-    echo ""
-  else
-    echo -e "${YELLOW}⚠️  SafetyCulture API seeding had issues, falling back to direct Kafka seeding${NC}"
-    echo ""
-  fi
-elif [ "$LOCAL_ONLY" = true ]; then
-  echo -e "${BLUE}ℹ️  --local-only flag set, skipping SafetyCulture API${NC}"
-  echo ""
-elif [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
-  echo -e "${BLUE}ℹ️  SAFETYCULTURE_API_TOKEN not set, skipping API seeding${NC}"
-  echo -e "${BLUE}   Use --local-only to explicitly skip API, or set token to use API${NC}"
-  echo ""
 fi
 
 # Step 1: Clear existing data
@@ -109,10 +80,7 @@ echo -e "${GREEN}✓ Seeded compliance rules${NC}"
 echo ""
 
 # Step 4: Seed mock credentials (4 users - not Sarah)
-# Only seed directly to Kafka if we're in local-only mode or API token not available
-# Otherwise, safetyculture-poller will pick up the real data from SafetyCulture
-if [ "$LOCAL_ONLY" = true ] || [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
-  echo -e "${YELLOW}[4/4] Seeding raw.safetyculture.credentials with mock data...${NC}"
+echo -e "${YELLOW}[4/4] Seeding raw.safetyculture.credentials with mock data...${NC}"
 
 if [ ! -f "$SEED_DATA_DIR/mock-credentials.json" ]; then
   echo -e "${RED}❌ ERROR: mock-credentials.json not found${NC}"
@@ -136,14 +104,8 @@ jq -c '.credentials[]' "$SEED_DATA_DIR/mock-credentials.json" | while read -r cr
       --property "key.separator=|"
 done
 
-  echo -e "${GREEN}✓ Seeded 4 mock credentials (Jordan, Zack, Michael, Emma - not Sarah)${NC}"
-  echo ""
-else
-  echo -e "${YELLOW}[4/4] Skipping direct Kafka credential seeding...${NC}"
-  echo -e "${BLUE}   Credentials were pushed to SafetyCulture API${NC}"
-  echo -e "${BLUE}   safetyculture-poller will pick them up on its next poll${NC}"
-  echo ""
-fi
+echo -e "${GREEN}✓ Seeded 4 mock credentials (Jordan, Zack, Michael, Emma - not Sarah)${NC}"
+echo ""
 
 # Summary
 echo "╔════════════════════════════════════════════════════════════════╗"
@@ -160,14 +122,8 @@ echo "    - Steve Goodsall (Education) - should show NOT_APPROVED"
 echo ""
 echo "  • Compliance rules (reference.compliance.rules)"
 echo ""
-
-if [ "$LOCAL_ONLY" = true ] || [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
-  echo "  • 4 mock credentials (raw.safetyculture.credentials)"
-  echo "    - Jordan, Zack, Stephen, Steve (not Emma - she's MISSING scenario)"
-else
-  echo "  • Credentials pushed to SafetyCulture API"
-  echo "    - safetyculture-poller will fetch them on next poll"
-fi
+echo "  • 4 mock credentials (raw.safetyculture.credentials)"
+echo "    - Jordan, Zack, Stephen, Steve (not Emma - she's MISSING scenario)"
 echo ""
 echo "Next step: Run 'make test-verify' to check the pipeline"
 echo ""
