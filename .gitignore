@@ -20,6 +20,9 @@ metals.sbt
 *.swp
 *.swo
 
+# Cursor IDE
+.cursor/
+
 # Environment variables
 .env
 
