@@ -44,6 +44,14 @@
     - Implemented template rendering with buildTemplateData function
     - Added template volume mount in docker-compose.services.yml
     - All tests passing (29 tests in notification-service)
+- Phase 2: Configuration externalization - complete
+  - Moved notification configuration from JSON resources to external YAML file
+  - Added SnakeYAML library for YAML parsing
+  - Created config/notification-settings.yaml with comprehensive settings
+  - Updated ComplianceNotificationRouterService to load from external YAML
+  - Added volume mount for config file in docker-compose
+  - Configuration now editable without rebuilding containers
+  - All tests passing (25 tests in compliance-notification-router)
 
 ## Next Up
 
