@@ -39,43 +39,48 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
   
   // Helper to create test config
   def createTestConfig(
-    overrideRecipient: String = "test@example.com",
-    template: String = "compliance-alert.txt"
+    overrideRecipient: Option[String] = Some("test@example.com"),
+    ccRecipients: Seq[String] = Seq.empty,
+    template: String = "individual-alert.html"
   ): NotificationConfig = {
     NotificationConfig(
-      rules = Map(
-        "EXPIRED" -> NotificationRule("HIGH"),
-        "EXPIRING" -> NotificationRule("MEDIUM"),
-        "MISSING" -> NotificationRule("HIGH"),
-        "NOT_APPROVED" -> NotificationRule("MEDIUM")
+      settings = NotificationSettings(
+        dedupTtlHours = 24,
+        overrideRecipient = overrideRecipient
       ),
-      override_recipient = overrideRecipient,
-      template = template
+      ccRecipients = ccRecipients,
+      issueTypes = Map(
+        "EXPIRED" -> IssueTypeConfig("HIGH", template),
+        "EXPIRING" -> IssueTypeConfig("MEDIUM", template),
+        "MISSING" -> IssueTypeConfig("HIGH", template),
+        "NOT_APPROVED" -> IssueTypeConfig("MEDIUM", template)
+      ),
+      frequencyRules = Seq.empty,
+      departmentManagers = Map.empty,
+      defaultManager = "",
+      digest = DigestConfig(enabled = false, "MONDAY", "09:00", "Australia/Sydney")
     )
   }
   
   // ========== Config Loading Tests ==========
   
-  "loadConfig" should "load notification config from resources" in {
-    val config = ComplianceNotificationRouterService.loadConfig()
+  "loadConfigFromYaml" should "load default config when file not found" in {
+    val config = ComplianceNotificationRouterService.loadConfigFromYaml("/nonexistent/path.yaml")
     config should not be null
-    config.override_recipient should not be empty
-    config.template should not be empty
-    config.rules should not be empty
+    config.issueTypes should contain key "EXPIRED"
+    config.issueTypes should contain key "EXPIRING"
+    config.issueTypes should contain key "MISSING"
+    config.issueTypes should contain key "NOT_APPROVED"
   }
   
-  it should "have override_recipient set" in {
-    val config = ComplianceNotificationRouterService.loadConfig()
-    config.override_recipient should not be empty
-    config.override_recipient should include("@")
-  }
-  
-  it should "have rules for EXPIRED, EXPIRING, MISSING, NOT_APPROVED" in {
-    val config = ComplianceNotificationRouterService.loadConfig()
-    config.rules should contain key "EXPIRED"
-    config.rules should contain key "EXPIRING"
-    config.rules should contain key "MISSING"
-    config.rules should contain key "NOT_APPROVED"
+  it should "have default issue types configured" in {
+    val config = ComplianceNotificationRouterService.defaultConfig()
+    config.issueTypes should contain key "EXPIRED"
+    config.issueTypes should contain key "EXPIRING"
+    config.issueTypes should contain key "MISSING"
+    config.issueTypes should contain key "NOT_APPROVED"
+    config.issueTypes("EXPIRED").priority should be("HIGH")
+    config.issueTypes("EXPIRING").priority should be("MEDIUM")
   }
   
   // ========== Routing Logic Tests ==========
@@ -114,13 +119,13 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     command.userId should be(compliance.userId)
     command.userName should be("John Doe")
     command.issueType should be("EXPIRED")
-    command.to should be(Seq(config.override_recipient))
+    command.to should be(Seq("test@example.com"))
     command.cc should be(None)
     command.bcc should be(None)
     command.subject should include("WWCC Compliance Alert: EXPIRED")
     command.subject should include("John Doe")
     command.isHtml should be(true)
-    command.template should be(config.template)
+    command.template should be("individual-alert.html")
     command.data.wwccNumber should be(compliance.wwccNumber)
     command.data.expiryDate should be(compliance.expiryDate)
     command.data.daysUntilExpiry should be(compliance.daysUntilExpiry)
@@ -169,10 +174,10 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     command.userId should be(compliance.userId)
   }
   
-  it should "use override_recipient as to address" in {
+  it should "use override_recipient as to address when set" in {
     val compliance = createCompliance()
     val overrideEmail = "override@test.com"
-    val config = createTestConfig(overrideRecipient = overrideEmail)
+    val config = createTestConfig(overrideRecipient = Some(overrideEmail))
     val notificationId = "test-notification-id-5"
     val createdAt = Instant.now().toString
     
@@ -182,6 +187,32 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     
     command.to should be(Seq(overrideEmail))
     command.to should not contain(compliance.email.get)
+  }
+  
+  it should "use compliance email when override not set" in {
+    val compliance = createCompliance().copy(email = Some("user@example.com"))
+    val config = createTestConfig(overrideRecipient = None)
+    val notificationId = "test-notification-id-5b"
+    val createdAt = Instant.now().toString
+    
+    val command = ComplianceNotificationRouterService.createNotificationCommand(
+      compliance, config, notificationId, createdAt
+    )
+    
+    command.to should be(Seq("user@example.com"))
+  }
+  
+  it should "include CC recipients when configured" in {
+    val compliance = createCompliance()
+    val config = createTestConfig(ccRecipients = Seq("cc1@example.com", "cc2@example.com"))
+    val notificationId = "test-notification-id-5c"
+    val createdAt = Instant.now().toString
+    
+    val command = ComplianceNotificationRouterService.createNotificationCommand(
+      compliance, config, notificationId, createdAt
+    )
+    
+    command.cc should be(Some(Seq("cc1@example.com", "cc2@example.com")))
   }
   
   it should "set correct priority based on status" in {

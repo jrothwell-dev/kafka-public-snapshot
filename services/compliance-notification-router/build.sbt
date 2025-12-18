@@ -22,6 +22,9 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-generic" % "0.14.6",
   "io.circe" %% "circe-parser" % "0.14.6",
   
+  // YAML
+  "org.yaml" % "snakeyaml" % "2.2",
+  
   // Redis for deduplication
   "redis.clients" % "jedis" % "5.0.0",
   

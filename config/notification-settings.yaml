@@ -1,0 +1,79 @@
+# WWCC Compliance Notification Settings
+# Edit this file to change notification behavior without rebuilding services
+
+# Global settings
+settings:
+  # Hours before same user/status combination can be notified again
+  dedup_ttl_hours: 24
+  
+  # Override all recipients to this address (for testing)
+  # Set to null or remove to use actual recipients
+  override_recipient: "jordanr@murrumbidgee.nsw.gov.au"
+
+# CC recipients for all compliance notifications
+cc_recipients:
+  - "jordanr@murrumbidgee.nsw.gov.au"
+  # Add more as needed:
+  # - "hr@murrumbidgee.nsw.gov.au"
+
+# Priority and template settings per issue type
+issue_types:
+  EXPIRED:
+    priority: HIGH
+    template: individual-alert.html
+  EXPIRING:
+    priority: MEDIUM
+    template: individual-alert.html
+  MISSING:
+    priority: HIGH
+    template: individual-alert.html
+  NOT_APPROVED:
+    priority: MEDIUM
+    template: individual-alert.html
+
+# Notification frequency based on days until expiry
+# First matching rule wins (evaluated top to bottom)
+frequency_rules:
+  - name: "Expired"
+    condition: "days_until_expiry < 0"
+    interval_hours: 24  # Daily
+  - name: "Critical - 1 week"
+    condition: "days_until_expiry <= 7"
+    interval_hours: 24  # Daily
+  - name: "Urgent - 2 weeks"
+    condition: "days_until_expiry <= 14"
+    interval_hours: 72  # Every 3 days
+  - name: "Warning - 1 month"
+    condition: "days_until_expiry <= 30"
+    interval_hours: 168  # Weekly
+  - name: "Notice - 2 months"
+    condition: "days_until_expiry <= 60"
+    interval_hours: 336  # Every 2 weeks
+  - name: "Early notice - 3 months"
+    condition: "days_until_expiry <= 90"
+    interval_hours: 720  # Monthly
+  - name: "Default"
+    condition: "always"
+    interval_hours: 720  # Monthly
+
+# Manager/supervisor mappings by department
+# Used for CC on notifications and weekly digests
+department_managers:
+  "IT Services": "jordanr@murrumbidgee.nsw.gov.au"
+  "Community Services": "jordanr@murrumbidgee.nsw.gov.au"
+  "Youth Programs": "jordanr@murrumbidgee.nsw.gov.au"
+  "Recreation": "jordanr@murrumbidgee.nsw.gov.au"
+  "Education": "jordanr@murrumbidgee.nsw.gov.au"
+
+# Default manager if department not found
+default_manager: "jordanr@murrumbidgee.nsw.gov.au"
+
+# Weekly digest settings
+digest:
+  enabled: true
+  # Day of week: MONDAY, TUESDAY, etc.
+  day_of_week: MONDAY
+  # Time in 24h format (AEDT - Australia/Sydney)
+  time: "09:00"
+  timezone: "Australia/Sydney"
+

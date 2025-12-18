@@ -10,6 +10,8 @@ import io.circe.parser._
 import io.circe.syntax._
 import redis.clients.jedis.{Jedis, JedisPool}
 import scala.io.Source
+import org.yaml.snakeyaml.Yaml
+import java.io.{File, FileInputStream}
 
 // Input model from processed.wwcc.status
 case class WwccCompliance(
@@ -31,12 +33,38 @@ case class WwccCompliance(
   processedAt: String
 )
 
-// Notification config model
-case class NotificationRule(priority: String)
-case class NotificationConfig(
-  rules: Map[String, NotificationRule],
-  override_recipient: String,
+// Notification config models
+case class NotificationSettings(
+  dedupTtlHours: Int,
+  overrideRecipient: Option[String]
+)
+
+case class IssueTypeConfig(
+  priority: String,
   template: String
+)
+
+case class FrequencyRule(
+  name: String,
+  condition: String,
+  intervalHours: Int
+)
+
+case class DigestConfig(
+  enabled: Boolean,
+  dayOfWeek: String,
+  time: String,
+  timezone: String
+)
+
+case class NotificationConfig(
+  settings: NotificationSettings,
+  ccRecipients: Seq[String],
+  issueTypes: Map[String, IssueTypeConfig],
+  frequencyRules: Seq[FrequencyRule],
+  departmentManagers: Map[String, String],
+  defaultManager: String,
+  digest: DigestConfig
 )
 
 // Output model for commands.notifications
@@ -64,16 +92,104 @@ case class NotificationCommand(
 
 object ComplianceNotificationRouterService {
   
-  def loadConfig(): NotificationConfig = {
-    val configStream = getClass.getResourceAsStream("/notification-config.json")
-    if (configStream == null) {
-      throw new RuntimeException("notification-config.json not found in resources")
+  def loadConfigFromYaml(configPath: String): NotificationConfig = {
+    val yaml = new Yaml()
+    val file = new File(configPath)
+    
+    if (!file.exists()) {
+      println(s"[WARN] Config file not found at $configPath, using defaults")
+      return defaultConfig()
     }
-    val configJson = Source.fromInputStream(configStream).mkString
-    decode[NotificationConfig](configJson) match {
-      case Right(config) => config
-      case Left(e) => throw new RuntimeException(s"Failed to parse notification-config.json: ${e.getMessage}")
+    
+    val input = new FileInputStream(file)
+    try {
+      val data = yaml.load[java.util.Map[String, Any]](input).asScala
+      parseConfig(data.toMap)
+    } finally {
+      input.close()
     }
+  }
+  
+  def parseConfig(data: Map[String, Any]): NotificationConfig = {
+    val settingsMap = data.getOrElse("settings", new java.util.HashMap[String, Any]())
+      .asInstanceOf[java.util.Map[String, Any]].asScala.toMap
+    
+    val settings = NotificationSettings(
+      dedupTtlHours = settingsMap.getOrElse("dedup_ttl_hours", 24).asInstanceOf[Int],
+      overrideRecipient = Option(settingsMap.get("override_recipient")).flatten.map(_.toString)
+    )
+    
+    val ccRecipients = Option(data.get("cc_recipients"))
+      .flatten
+      .map(_.asInstanceOf[java.util.List[String]].asScala.toSeq)
+      .getOrElse(Seq.empty)
+    
+    val issueTypesRaw = data.getOrElse("issue_types", new java.util.HashMap[String, Any]())
+      .asInstanceOf[java.util.Map[String, Any]].asScala.toMap
+    
+    val issueTypes = issueTypesRaw.map { case (k, v) =>
+      val m = v.asInstanceOf[java.util.Map[String, Any]].asScala
+      k -> IssueTypeConfig(
+        priority = m.getOrElse("priority", "MEDIUM").toString,
+        template = m.getOrElse("template", "individual-alert.html").toString
+      )
+    }
+    
+    val frequencyRulesRaw = Option(data.get("frequency_rules"))
+      .flatten
+      .map(_.asInstanceOf[java.util.List[Any]].asScala.toSeq)
+      .getOrElse(Seq.empty)
+    
+    val frequencyRules = frequencyRulesRaw.map { r =>
+      val m = r.asInstanceOf[java.util.Map[String, Any]].asScala
+      FrequencyRule(
+        name = m.getOrElse("name", "").toString,
+        condition = m.getOrElse("condition", "always").toString,
+        intervalHours = m.getOrElse("interval_hours", 24).asInstanceOf[Int]
+      )
+    }
+    
+    val departmentManagersRaw = data.getOrElse("department_managers", new java.util.HashMap[String, String]())
+      .asInstanceOf[java.util.Map[String, String]].asScala.toMap
+    
+    val defaultManager = data.getOrElse("default_manager", "").toString
+    
+    val digestRaw = data.getOrElse("digest", new java.util.HashMap[String, Any]())
+      .asInstanceOf[java.util.Map[String, Any]].asScala.toMap
+    
+    val digest = DigestConfig(
+      enabled = digestRaw.getOrElse("enabled", false).asInstanceOf[Boolean],
+      dayOfWeek = digestRaw.getOrElse("day_of_week", "MONDAY").toString,
+      time = digestRaw.getOrElse("time", "09:00").toString,
+      timezone = digestRaw.getOrElse("timezone", "Australia/Sydney").toString
+    )
+    
+    NotificationConfig(
+      settings = settings,
+      ccRecipients = ccRecipients,
+      issueTypes = issueTypes,
+      frequencyRules = frequencyRules,
+      departmentManagers = departmentManagersRaw,
+      defaultManager = defaultManager,
+      digest = digest
+    )
+  }
+  
+  def defaultConfig(): NotificationConfig = {
+    NotificationConfig(
+      settings = NotificationSettings(dedupTtlHours = 24, overrideRecipient = None),
+      ccRecipients = Seq.empty,
+      issueTypes = Map(
+        "EXPIRED" -> IssueTypeConfig("HIGH", "individual-alert.html"),
+        "EXPIRING" -> IssueTypeConfig("MEDIUM", "individual-alert.html"),
+        "MISSING" -> IssueTypeConfig("HIGH", "individual-alert.html"),
+        "NOT_APPROVED" -> IssueTypeConfig("MEDIUM", "individual-alert.html")
+      ),
+      frequencyRules = Seq.empty,
+      departmentManagers = Map.empty,
+      defaultManager = "",
+      digest = DigestConfig(enabled = false, "MONDAY", "09:00", "Australia/Sydney")
+    )
   }
   
   // Pure function: determines if a notification should be sent for a given status
@@ -88,7 +204,7 @@ object ComplianceNotificationRouterService {
   
   // Pure function: gets priority for a status from config, defaults to MEDIUM
   def getPriority(status: String, config: NotificationConfig): String = {
-    config.rules.get(status)
+    config.issueTypes.get(status)
       .map(_.priority)
       .getOrElse("MEDIUM")
   }
@@ -101,20 +217,29 @@ object ComplianceNotificationRouterService {
     createdAt: String
   ): NotificationCommand = {
     val userName = s"${compliance.firstName} ${compliance.lastName}"
-    val priority = getPriority(compliance.compliance_status, config)
-    val subject = s"WWCC Compliance Alert: ${compliance.compliance_status} - ${compliance.firstName} ${compliance.lastName}"
+    val issueConfig = config.issueTypes.getOrElse(compliance.compliance_status, 
+      IssueTypeConfig("MEDIUM", "individual-alert.html"))
+    
+    // Determine recipients
+    val toRecipients = config.settings.overrideRecipient match {
+      case Some(overrideAddr) => Seq(overrideAddr)
+      case None => compliance.email.toSeq
+    }
+    
+    // Add CC recipients
+    val ccRecipients = if (config.ccRecipients.nonEmpty) Some(config.ccRecipients) else None
     
     NotificationCommand(
       notificationId = notificationId,
       userId = compliance.userId,
       userName = userName,
-      to = Seq(config.override_recipient),
-      cc = None,
+      to = toRecipients,
+      cc = ccRecipients,
       bcc = None,
-      subject = subject,
+      subject = s"WWCC Compliance Alert: ${compliance.compliance_status} - ${compliance.firstName} ${compliance.lastName}",
       issueType = compliance.compliance_status,
-      priority = priority,
-      template = config.template,
+      priority = issueConfig.priority,
+      template = issueConfig.template,
       isHtml = true,
       data = NotificationData(
         wwccNumber = compliance.wwccNumber,
@@ -134,11 +259,15 @@ object ComplianceNotificationRouterService {
     println(s"[INFO] Redis: $redisHost:6379")
     
     // Load notification config
-    val config = loadConfig()
-    println(s"[INFO] Loaded notification config")
-    println(s"      Override recipient: ${config.override_recipient}")
-    println(s"      Template: ${config.template}")
-    println(s"      Rules: ${config.rules.keys.mkString(", ")}")
+    val configPath = sys.env.getOrElse("NOTIFICATION_CONFIG_PATH", "/app/config/notification-settings.yaml")
+    val config = loadConfigFromYaml(configPath)
+    println(s"[INFO] Loaded notification config from $configPath")
+    config.settings.overrideRecipient.foreach(overrideAddr => 
+      println(s"      Override recipient: $overrideAddr")
+    )
+    println(s"      Issue types: ${config.issueTypes.keys.mkString(", ")}")
+    println(s"      CC recipients: ${config.ccRecipients.mkString(", ")}")
+    println(s"      Dedup TTL: ${config.settings.dedupTtlHours} hours")
     
     // Redis connection for deduplication
     val jedisPool = new JedisPool(redisHost, 6379)
@@ -198,8 +327,8 @@ object ComplianceNotificationRouterService {
                       notificationCommand.asJson.noSpaces
                     )).get() // Block until send completes
                     
-                    // Mark as notified in Redis (24 hour expiry)
-                    jedis.setex(key, 86400, "sent")
+                    // Mark as notified in Redis (configurable TTL)
+                    jedis.setex(key, config.settings.dedupTtlHours * 3600, "sent")
                     
                     println(s"[INFO] Created notification: $notificationId")
                     println(s"      User: ${notificationCommand.userName} (${compliance.userId})")
