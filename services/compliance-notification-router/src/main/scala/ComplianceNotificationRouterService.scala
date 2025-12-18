@@ -72,6 +72,50 @@ object ComplianceNotificationRouterService {
     }
   }
   
+  // Pure function: determines if a notification should be sent for a given status
+  def shouldNotify(status: String): Boolean = {
+    status != "COMPLIANT"
+  }
+  
+  // Pure function: generates deduplication key for a user and status
+  def dedupKey(userId: String, status: String): String = {
+    s"notification:${userId}:${status}"
+  }
+  
+  // Pure function: gets priority for a status from config, defaults to MEDIUM
+  def getPriority(status: String, config: NotificationConfig): String = {
+    config.rules.get(status)
+      .map(_.priority)
+      .getOrElse("MEDIUM")
+  }
+  
+  // Pure function: creates a notification command from compliance data and config
+  def createNotificationCommand(
+    compliance: WwccCompliance,
+    config: NotificationConfig,
+    notificationId: String,
+    createdAt: String
+  ): NotificationCommand = {
+    val userName = s"${compliance.firstName} ${compliance.lastName}"
+    val priority = getPriority(compliance.compliance_status, config)
+    
+    NotificationCommand(
+      notificationId = notificationId,
+      userId = compliance.userId,
+      userName = userName,
+      email = config.override_recipient,
+      issueType = compliance.compliance_status,
+      priority = priority,
+      template = config.template,
+      data = NotificationData(
+        wwccNumber = compliance.wwccNumber,
+        expiryDate = compliance.expiryDate,
+        daysUntilExpiry = compliance.daysUntilExpiry
+      ),
+      createdAt = createdAt
+    )
+  }
+  
   def main(args: Array[String]): Unit = {
     val kafkaBootstrap = sys.env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     val redisHost = sys.env.getOrElse("REDIS_HOST", "redis")
@@ -122,35 +166,19 @@ object ComplianceNotificationRouterService {
           decode[WwccCompliance](record.value()) match {
             case Right(compliance) =>
               // Only process non-compliant statuses
-              if (compliance.compliance_status != "COMPLIANT") {
+              if (shouldNotify(compliance.compliance_status)) {
                 // Check if we've already notified for this user/status in the last 24 hours
-                val dedupKey = s"notification:${compliance.userId}:${compliance.compliance_status}"
-                val alreadyNotified = jedis.exists(dedupKey)
+                val key = dedupKey(compliance.userId, compliance.compliance_status)
+                val alreadyNotified = jedis.exists(key)
                 
                 if (!alreadyNotified) {
-                  // Get priority from config rules, default to MEDIUM
-                  val priority = config.rules.get(compliance.compliance_status)
-                    .map(_.priority)
-                    .getOrElse("MEDIUM")
-                  
                   // Create notification command
                   val notificationId = java.util.UUID.randomUUID().toString
-                  val userName = s"${compliance.firstName} ${compliance.lastName}"
-                  
-                  val notificationCommand = NotificationCommand(
-                    notificationId = notificationId,
-                    userId = compliance.userId,
-                    userName = userName,
-                    email = config.override_recipient,  // Always use override for now
-                    issueType = compliance.compliance_status,
-                    priority = priority,
-                    template = config.template,
-                    data = NotificationData(
-                      wwccNumber = compliance.wwccNumber,
-                      expiryDate = compliance.expiryDate,
-                      daysUntilExpiry = compliance.daysUntilExpiry
-                    ),
-                    createdAt = Instant.now().toString
+                  val notificationCommand = createNotificationCommand(
+                    compliance,
+                    config,
+                    notificationId,
+                    Instant.now().toString
                   )
                   
                   try {
@@ -162,11 +190,11 @@ object ComplianceNotificationRouterService {
                     )).get() // Block until send completes
                     
                     // Mark as notified in Redis (24 hour expiry)
-                    jedis.setex(dedupKey, 86400, "sent")
+                    jedis.setex(key, 86400, "sent")
                     
                     println(s"[INFO] Created notification: $notificationId")
-                    println(s"      User: $userName (${compliance.userId})")
-                    println(s"      Issue: ${compliance.compliance_status} (priority: $priority)")
+                    println(s"      User: ${notificationCommand.userName} (${compliance.userId})")
+                    println(s"      Issue: ${compliance.compliance_status} (priority: ${notificationCommand.priority})")
                     println(s"      Email: ${config.override_recipient}")
                     println(s"      Published to partition ${metadata.partition()} at offset ${metadata.offset()}")
                   } catch {

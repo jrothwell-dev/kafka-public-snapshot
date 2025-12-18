@@ -16,5 +16,8 @@ libraryDependencies ++= Seq(
   "io.circe" %% "circe-parser" % "0.14.6",
   
   // Redis for deduplication
-  "redis.clients" % "jedis" % "5.0.0"
+  "redis.clients" % "jedis" % "5.0.0",
+  
+  // Testing
+  "org.scalatest" %% "scalatest" % "3.2.17" % Test
 )
