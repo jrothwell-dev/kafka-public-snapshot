@@ -31,12 +31,19 @@
 
 ## In Progress
 
-- Phase 1: Flexible notification model - Step 1 complete (model updated)
-  - Updated NotificationCommand to support multiple recipients (to/cc/bcc) and explicit subject
-  - Updated both compliance-notification-router and notification-service
-  - Updated sendEmail function to handle CC and BCC recipients
-  - Updated all tests to use new model
-  - All tests passing (24 tests in compliance-notification-router, 22 tests in notification-service)
+- Phase 1: Flexible notification model
+  - Step 1 complete (model updated)
+    - Updated NotificationCommand to support multiple recipients (to/cc/bcc) and explicit subject
+    - Updated both compliance-notification-router and notification-service
+    - Updated sendEmail function to handle CC and BCC recipients
+    - Updated all tests to use new model
+    - All tests passing (24 tests in compliance-notification-router, 22 tests in notification-service)
+  - Step 2 complete (HTML templates)
+    - Added Mustache templating library to notification-service
+    - Created HTML email templates in config/email-templates/
+    - Implemented template rendering with buildTemplateData function
+    - Added template volume mount in docker-compose.services.yml
+    - All tests passing (29 tests in notification-service)
 
 ## Next Up
 
