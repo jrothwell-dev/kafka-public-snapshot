@@ -56,6 +56,8 @@ services:
       SMTP_HOST: ${SMTP_HOST:-smtp.murrumbidgee.nsw.gov.au}
       SMTP_PORT: ${SMTP_PORT:-25}
       SMTP_FROM: ${SMTP_FROM:-noreply@murrumbidgee.nsw.gov.au}
+    volumes:
+      - ./config/email-templates:/app/templates:ro
     networks:
       - default
     restart: unless-stopped

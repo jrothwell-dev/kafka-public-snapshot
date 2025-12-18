@@ -22,5 +22,8 @@ WORKDIR /app
 # Copy only the built application from builder stage
 COPY --from=builder /build/target/universal/stage ./
 
+# Create templates directory (will be mounted at runtime, but this ensures it exists)
+RUN mkdir -p /app/templates
+
 ENTRYPOINT ["./bin/notification-service"]
 

@@ -25,6 +25,9 @@ libraryDependencies ++= Seq(
   // JavaMail for email sending
   "com.sun.mail" % "javax.mail" % "1.6.2",
   
+  // Mustache templating
+  "com.github.spullara.mustache.java" % "compiler" % "0.9.10",
+  
   // Redis for deduplication
   "redis.clients" % "jedis" % "5.0.0",
   

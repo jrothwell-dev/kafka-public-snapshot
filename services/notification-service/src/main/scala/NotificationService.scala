@@ -11,6 +11,9 @@ import io.circe.syntax._
 import redis.clients.jedis.{Jedis, JedisPool}
 import javax.mail._
 import javax.mail.internet._
+import com.github.mustachejava.{DefaultMustacheFactory, Mustache}
+import java.io.{StringWriter, File}
+import scala.jdk.CollectionConverters._
 
 // Input model from commands.notifications
 case class NotificationData(
@@ -76,6 +79,81 @@ object NotificationService {
       |
       |This is an automated message. Please do not reply.
     """.stripMargin.trim
+  }
+  
+  // Renders a Mustache template with the provided data
+  def renderTemplate(templatePath: String, data: Map[String, Any]): Either[String, String] = {
+    try {
+      val templateDir = new File("/app/templates")
+      val mf = new DefaultMustacheFactory(templateDir)
+      val mustache = mf.compile(templatePath)
+      val writer = new StringWriter()
+      mustache.execute(writer, data.asJava)
+      Right(writer.toString)
+    } catch {
+      case e: Exception => Left(s"Template rendering failed: ${e.getMessage}")
+    }
+  }
+  
+  // Builds template data map from NotificationCommand
+  def buildTemplateData(command: NotificationCommand): Map[String, Any] = {
+    val issueType = command.issueType
+    
+    val (message, actionRequired) = issueType match {
+      case "EXPIRED" => (
+        "Your Working With Children Check (WWCC) has expired. You must renew your WWCC immediately to continue working in child-related roles.",
+        "Please apply for a new WWCC through Service NSW as soon as possible and upload your new clearance to SafetyCulture once approved."
+      )
+      case "EXPIRING" => (
+        s"Your Working With Children Check (WWCC) will expire soon. Please renew before the expiry date to maintain compliance.",
+        "Apply for renewal through Service NSW and upload your new clearance to SafetyCulture once approved."
+      )
+      case "MISSING" => (
+        "Our records indicate that you require a Working With Children Check (WWCC) for your role, but we don't have one on file.",
+        "Please upload your current WWCC clearance to SafetyCulture. If you don't have a WWCC, apply through Service NSW immediately."
+      )
+      case "NOT_APPROVED" => (
+        "Your WWCC document has been uploaded but is pending approval in our system.",
+        "No action required from you at this time. HR will review and approve your document shortly."
+      )
+      case _ => (
+        "There is an issue with your WWCC compliance status that requires attention.",
+        "Please contact HR for more information."
+      )
+    }
+    
+    val (statusBgColor, statusTextColor) = issueType match {
+      case "EXPIRED" => ("#dc3545", "#ffffff")
+      case "EXPIRING" => ("#fd7e14", "#ffffff")
+      case "MISSING" => ("#dc3545", "#ffffff")
+      case "NOT_APPROVED" => ("#ffc107", "#212529")
+      case _ => ("#6c757d", "#ffffff")
+    }
+    
+    val daysColor = command.data.daysUntilExpiry match {
+      case Some(d) if d < 0 => "#dc3545"
+      case Some(d) if d < 14 => "#fd7e14"
+      case Some(d) if d < 30 => "#ffc107"
+      case _ => "#28a745"
+    }
+    
+    Map(
+      "userName" -> command.userName,
+      "issueType" -> issueType,
+      "message" -> message,
+      "actionRequired" -> actionRequired,
+      "wwccNumber" -> command.data.wwccNumber.orNull,
+      "expiryDate" -> command.data.expiryDate.orNull,
+      "daysUntilExpiry" -> command.data.daysUntilExpiry.map(_.toString).orNull,
+      "daysColor" -> daysColor,
+      "statusBgColor" -> statusBgColor,
+      "statusTextColor" -> statusTextColor,
+      "isExpired" -> (issueType == "EXPIRED"),
+      "isExpiring" -> (issueType == "EXPIRING"),
+      "isMissing" -> (issueType == "MISSING"),
+      "isNotApproved" -> (issueType == "NOT_APPROVED"),
+      "timestamp" -> java.time.Instant.now().toString
+    )
   }
   
   // Sends email using JavaMail
@@ -194,7 +272,20 @@ object NotificationService {
                 println(s"      Issue: ${command.issueType} (priority: ${command.priority})")
                 
                 // Send email
-                val body = createBody(command)
+                val templateData = buildTemplateData(command)
+                val bodyResult = if (command.isHtml) {
+                  renderTemplate("individual-alert.html", templateData)
+                } else {
+                  Right(createBody(command))  // Keep plain text fallback
+                }
+                
+                val body = bodyResult match {
+                  case Right(htmlBody) => htmlBody
+                  case Left(error) =>
+                    println(s"[WARN] Template rendering failed: $error, falling back to plain text")
+                    createBody(command)
+                }
+                
                 val emailResult = sendEmail(
                   smtpHost, 
                   smtpPort, 

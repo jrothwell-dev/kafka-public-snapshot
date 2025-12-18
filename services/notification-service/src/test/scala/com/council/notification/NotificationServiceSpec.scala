@@ -268,5 +268,113 @@ class NotificationServiceSpec extends AnyFlatSpec with Matchers {
     
     body should include("Days until expiry: 365")
   }
+  
+  // ========== Template Data Building Tests ==========
+  
+  "buildTemplateData" should "build correct data for EXPIRED status" in {
+    val command = createNotificationCommand(
+      issueType = "EXPIRED",
+      userName = "John Doe",
+      wwccNumber = Some("WWC123456"),
+      expiryDate = Some("2024-01-01"),
+      daysUntilExpiry = Some(-10)
+    )
+    val data = NotificationService.buildTemplateData(command)
+    
+    data("userName").asInstanceOf[String] should be("John Doe")
+    data("issueType").asInstanceOf[String] should be("EXPIRED")
+    data("isExpired").asInstanceOf[Boolean] should be(true)
+    data("isExpiring").asInstanceOf[Boolean] should be(false)
+    data("isMissing").asInstanceOf[Boolean] should be(false)
+    data("isNotApproved").asInstanceOf[Boolean] should be(false)
+    data("statusBgColor").asInstanceOf[String] should be("#dc3545")
+    data("statusTextColor").asInstanceOf[String] should be("#ffffff")
+    data("daysColor").asInstanceOf[String] should be("#dc3545") // Negative days = red
+    data("message").asInstanceOf[String] should include("expired")
+    data("actionRequired").asInstanceOf[String] should include("apply")
+  }
+  
+  it should "build correct data for EXPIRING status" in {
+    val command = createNotificationCommand(
+      issueType = "EXPIRING",
+      daysUntilExpiry = Some(7)
+    )
+    val data = NotificationService.buildTemplateData(command)
+    
+    data("issueType").asInstanceOf[String] should be("EXPIRING")
+    data("isExpired").asInstanceOf[Boolean] should be(false)
+    data("isExpiring").asInstanceOf[Boolean] should be(true)
+    data("statusBgColor").asInstanceOf[String] should be("#fd7e14")
+    data("daysColor").asInstanceOf[String] should be("#fd7e14") // Less than 14 days = orange
+  }
+  
+  it should "build correct data for MISSING status" in {
+    val command = createNotificationCommand(
+      issueType = "MISSING",
+      wwccNumber = None,
+      expiryDate = None,
+      daysUntilExpiry = None
+    )
+    val data = NotificationService.buildTemplateData(command)
+    
+    data("issueType").asInstanceOf[String] should be("MISSING")
+    data("isMissing").asInstanceOf[Boolean] should be(true)
+    data("statusBgColor").asInstanceOf[String] should be("#dc3545")
+    data("message").asInstanceOf[String] should include("don't have one on file")
+  }
+  
+  it should "build correct data for NOT_APPROVED status" in {
+    val command = createNotificationCommand(
+      issueType = "NOT_APPROVED"
+    )
+    val data = NotificationService.buildTemplateData(command)
+    
+    data("issueType").asInstanceOf[String] should be("NOT_APPROVED")
+    data("isNotApproved").asInstanceOf[Boolean] should be(true)
+    data("statusBgColor").asInstanceOf[String] should be("#ffc107")
+    data("statusTextColor").asInstanceOf[String] should be("#212529")
+    data("actionRequired").asInstanceOf[String] should include("No action required")
+  }
+  
+  it should "set correct days color based on days until expiry" in {
+    val expiredCommand = createNotificationCommand(daysUntilExpiry = Some(-5))
+    val expiredData = NotificationService.buildTemplateData(expiredCommand)
+    expiredData("daysColor").asInstanceOf[String] should be("#dc3545") // Red for negative
+    
+    val urgentCommand = createNotificationCommand(daysUntilExpiry = Some(5))
+    val urgentData = NotificationService.buildTemplateData(urgentCommand)
+    urgentData("daysColor").asInstanceOf[String] should be("#fd7e14") // Orange for < 14 days
+    
+    val warningCommand = createNotificationCommand(daysUntilExpiry = Some(20))
+    val warningData = NotificationService.buildTemplateData(warningCommand)
+    warningData("daysColor").asInstanceOf[String] should be("#ffc107") // Yellow for < 30 days
+    
+    val goodCommand = createNotificationCommand(daysUntilExpiry = Some(60))
+    val goodData = NotificationService.buildTemplateData(goodCommand)
+    goodData("daysColor").asInstanceOf[String] should be("#28a745") // Green for >= 30 days
+  }
+  
+  it should "handle null values for optional fields" in {
+    val command = createNotificationCommand(
+      wwccNumber = None,
+      expiryDate = None,
+      daysUntilExpiry = None
+    )
+    val data = NotificationService.buildTemplateData(command)
+    
+    Option(data("wwccNumber")) should be(None)
+    Option(data("expiryDate")) should be(None)
+    Option(data("daysUntilExpiry")) should be(None)
+  }
+  
+  it should "include timestamp in template data" in {
+    val command = createNotificationCommand()
+    val data = NotificationService.buildTemplateData(command)
+    
+    data should contain key "timestamp"
+    val timestamp = data("timestamp").asInstanceOf[String]
+    timestamp should not be null
+    timestamp should not be empty
+  }
 }
 
