@@ -54,6 +54,26 @@ object ScPollerService {
     md.digest(text.getBytes).map("%02x".format(_)).mkString
   }
   
+  // Pure function: checks if a credential is a WWCC type
+  def isWwccCredential(credential: DocumentVersion): Boolean = {
+    credential.document_type.name.toLowerCase.contains("children")
+  }
+  
+  // Pure function: filters credentials to only WWCC types
+  def filterWwccCredentials(credentials: Seq[DocumentVersion]): Seq[DocumentVersion] = {
+    credentials.filter(isWwccCredential)
+  }
+  
+  // Pure function: parses credentials response JSON
+  def parseCredentialsResponse(json: String): Either[String, Seq[DocumentVersion]] = {
+    decode[CredentialsResponse](json).left.map(_.getMessage).map(_.latest_document_versions)
+  }
+  
+  // Pure function: formats ExpiryDate to "YYYY-MM-DD" string
+  def formatExpiryDate(date: Option[ExpiryDate]): Option[String] = {
+    date.map(d => f"${d.year}-${d.month}%02d-${d.day}%02d")
+  }
+  
   def getAllCredentials(apiToken: String): Either[String, Seq[DocumentVersion]] = {
     val url = "https://api.safetyculture.io/credentials/v1/credentials"
     val backend = HttpURLConnectionBackend()
@@ -70,8 +90,8 @@ object ScPollerService {
       response.code.code match {
         case 200 => 
           response.body.flatMap(body => 
-            decode[CredentialsResponse](body).left.map(_.getMessage)
-          ).map(_.latest_document_versions)
+            parseCredentialsResponse(body)
+          )
         case code => 
           Left(s"HTTP $code: ${response.body.left.getOrElse("No error details")}")
       }
@@ -116,7 +136,7 @@ object ScPollerService {
             println(s"[INFO] Got ${credentials.length} credentials")
             
             // Filter for WWCC only
-            val wwccCredentials = credentials.filter(_.document_type.name.toLowerCase.contains("children"))
+            val wwccCredentials = filterWwccCredentials(credentials)
             println(s"[INFO] Found ${wwccCredentials.length} WWCC credentials")
             
             var newCredentials = 0
@@ -131,9 +151,7 @@ object ScPollerService {
                 "expiry_status" -> cred.metadata.expiry_status,
                 "approval_status" -> cred.metadata.approval.status,
                 "credential_number" -> cred.attributes.credential_number.getOrElse(""),
-                "expiry_date" -> cred.attributes.expiry_period_end_date.map(d => 
-                  s"${d.year}-${d.month}-${d.day}"
-                ).getOrElse("")
+                "expiry_date" -> formatExpiryDate(cred.attributes.expiry_period_end_date).getOrElse("")
               ).asJson.noSpaces
               
               val contentHash = md5Hash(credentialContent)
