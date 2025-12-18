@@ -10,8 +10,11 @@ export DOCKER_BUILDKIT=1
 SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router notification-service
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
+TEST_COMPOSE_FILE = docker-compose.test.yml
 KAFKA_CONTAINER = kafka
 KAFKA_BOOTSTRAP = localhost:9092
+TEST_KAFKA_CONTAINER = test-kafka
+TEST_KAFKA_BOOTSTRAP = localhost:9093
 
 # Topic definitions (name:partitions:replication)
 TOPICS = \
@@ -34,6 +37,7 @@ TOPICS = \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-all rebuild-all \
 	test-all test-integration validate test-reset test-seed test-verify test-full test-watch \
+	test-e2e test-e2e-up test-e2e-down test-e2e-logs \
 	ci-test ci-build \
 	status health logs watch \
 	dev dev-build dev-up dev-down dev-restart
@@ -89,6 +93,12 @@ help:
 	@echo "  make test-verify     - Verify data flow and message counts"
 	@echo "  make test-full       - Full test cycle (reset, start, seed, verify)"
 	@echo "  make test-watch      - Watch all topics side by side"
+	@echo ""
+	@echo "🧪 E2E Test Environment (Isolated):"
+	@echo "  make test-e2e        - Run full E2E test in isolated environment"
+	@echo "  make test-e2e-up     - Start isolated test environment"
+	@echo "  make test-e2e-down   - Stop isolated test environment"
+	@echo "  make test-e2e-logs   - View logs from test environment"
 	@echo ""
 	@echo "🔄 CI/CD:"
 	@echo "  make ci-test         - Full CI test cycle (reset, seed, verify)"
@@ -478,6 +488,43 @@ ci-build:
 	@[ -n "$$SAFETYCULTURE_API_TOKEN" ] || (echo "⚠️  WARNING: SAFETYCULTURE_API_TOKEN not set, using dummy token for build"; export SAFETYCULTURE_API_TOKEN=dummy-token-for-build)
 	@$(MAKE) services-build
 	@echo "✅ All service images built"
+
+# ============================================================================
+# E2E Test Environment (Isolated)
+# ============================================================================
+
+test-e2e:
+	@echo "🧪 Running E2E test in isolated environment..."
+	@./scripts/test-e2e.sh
+
+test-e2e-up:
+	@echo "🚀 Starting isolated test environment..."
+	@docker-compose -f $(TEST_COMPOSE_FILE) up -d
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 15
+	@echo "📊 Creating Kafka topics..."
+	@docker exec $(TEST_KAFKA_CONTAINER) sh -c ' \
+		for topic in $(TOPICS); do \
+			IFS=":" read -r name partitions replication <<< "$$topic"; \
+			kafka-topics --bootstrap-server $(TEST_KAFKA_BOOTSTRAP) --list 2>/dev/null | grep -q "^$$name$$" || \
+			kafka-topics --create --topic $$name --partitions $$partitions --replication-factor $$replication \
+				--bootstrap-server $(TEST_KAFKA_BOOTSTRAP) >/dev/null 2>&1; \
+		done'
+	@echo "✅ Test environment ready!"
+	@echo ""
+	@echo "Test environment access:"
+	@echo "  • Kafka UI:   http://localhost:8082"
+	@echo "  • Kafka:      localhost:9093"
+	@echo "  • Redis:      localhost:6380"
+
+test-e2e-down:
+	@echo "🛑 Stopping isolated test environment..."
+	@docker-compose -f $(TEST_COMPOSE_FILE) down
+	@echo "✅ Test environment stopped"
+
+test-e2e-logs:
+	@echo "📋 Test environment logs:"
+	@docker-compose -f $(TEST_COMPOSE_FILE) logs -f --tail=50
 
 logs:
 	@docker-compose -f $(SERVICES_FILE) logs -f --tail=50

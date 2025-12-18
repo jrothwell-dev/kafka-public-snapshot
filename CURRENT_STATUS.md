@@ -21,3 +21,18 @@
 - Set up webhook receiver
 - Test notification flow end-to-end
 
+## Completed (Latest)
+
+- [x] Fully isolated E2E test environment with separate Kafka, Redis, and services
+  - Created `docker-compose.test.yml` with complete isolated test stack
+  - Test environment uses separate network: `council-kafka-platform_test-network`
+  - Test containers prefixed with `test-` (test-kafka, test-redis, etc.)
+  - Same service code, same topic names, same internal config (kafka:29092, redis:6379)
+  - Different external ports to avoid conflicts:
+    - Test Kafka: localhost:9093 (production: 9092)
+    - Test Redis: localhost:6380 (production: 6379)
+    - Test Kafka UI: localhost:8082 (production: 8081)
+  - Created `scripts/test-e2e.sh` for full E2E test execution
+  - Added Makefile targets: `test-e2e`, `test-e2e-up`, `test-e2e-down`, `test-e2e-logs`
+  - Test environment can run alongside production without interference
+
