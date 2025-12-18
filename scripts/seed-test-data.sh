@@ -55,7 +55,7 @@ if [ ! -f "$SEED_DATA_DIR/required-users.json" ]; then
   exit 1
 fi
 
-cat "$SEED_DATA_DIR/required-users.json" | \
+jq -c . "$SEED_DATA_DIR/required-users.json" | \
   docker exec -i "$KAFKA_CONTAINER" kafka-console-producer \
     --topic "reference.wwcc.required" \
     --bootstrap-server "$KAFKA_BOOTSTRAP"
@@ -71,7 +71,7 @@ if [ ! -f "$SEED_DATA_DIR/compliance-rules.json" ]; then
   exit 1
 fi
 
-cat "$SEED_DATA_DIR/compliance-rules.json" | \
+jq -c . "$SEED_DATA_DIR/compliance-rules.json" | \
   docker exec -i "$KAFKA_CONTAINER" kafka-console-producer \
     --topic "reference.compliance.rules" \
     --bootstrap-server "$KAFKA_BOOTSTRAP"
