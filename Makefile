@@ -32,7 +32,7 @@ TOPICS = \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
-	test-reset test-seed test-verify test-full test-watch \
+	test-all test-reset test-seed test-verify test-full test-watch \
 	ci-test ci-build \
 	status health logs watch \
 	dev dev-build dev-up dev-down dev-restart
@@ -82,6 +82,7 @@ help:
 	@echo "  make seed-all       - Seed all test data"
 	@echo ""
 	@echo "🧪 Testing Infrastructure:"
+	@echo "  make test-all        - Run all unit tests for all services"
 	@echo "  make test-reset      - Complete pipeline reset (stop services, clear topics, clear Redis)"
 	@echo "  make test-seed       - Seed consistent test data"
 	@echo "  make test-verify     - Verify data flow and message counts"
@@ -363,6 +364,13 @@ status:
 # ============================================================================
 # Testing Infrastructure
 # ============================================================================
+
+test-all:
+	@echo "Running all unit tests..."
+	@cd services/safetyculture-poller && sbt test
+	@cd services/wwcc-transformer && sbt test
+	@cd services/compliance-notification-router && sbt test
+	@echo "✓ All tests passed"
 
 test-reset:
 	@echo "🔄 Running pipeline reset..."
