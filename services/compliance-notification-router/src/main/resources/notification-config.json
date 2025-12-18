@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "EXPIRED": { "priority": "HIGH" },
+    "EXPIRING": { "priority": "MEDIUM" },
+    "MISSING": { "priority": "HIGH" },
+    "NOT_APPROVED": { "priority": "MEDIUM" }
+  },
+  "override_recipient": "jordanr@murrumbidgee.nsw.gov.au",
+  "template": "compliance-alert.txt"
+}

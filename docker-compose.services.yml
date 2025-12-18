@@ -38,6 +38,7 @@ services:
     container_name: compliance-notification-router
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
     networks:
       - default
     restart: unless-stopped
