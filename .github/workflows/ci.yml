@@ -77,7 +77,7 @@ jobs:
         run: |
           mkdir -p logs
           docker-compose -f docker-compose.services.yml logs > logs/services.log 2>&1 || true
-          docker logs sc-poller > logs/sc-poller.log 2>&1 || true
+          docker logs safetyculture-poller > logs/safetyculture-poller.log 2>&1 || true
           docker logs wwcc-transformer > logs/wwcc-transformer.log 2>&1 || true
           docker logs wwcc-compliance-monitor > logs/wwcc-compliance-monitor.log 2>&1 || true
           docker logs compliance-notification-router > logs/compliance-notification-router.log 2>&1 || true

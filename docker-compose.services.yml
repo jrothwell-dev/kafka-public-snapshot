@@ -1,10 +1,10 @@
 services:
 
-  sc-poller:
+  safetyculture-poller:
     build:
-      context: ./services/sc-poller
+      context: ./services/safetyculture-poller
       dockerfile: Dockerfile
-    container_name: sc-poller
+    container_name: safetyculture-poller
     environment:
       SAFETYCULTURE_API_TOKEN: ${SAFETYCULTURE_API_TOKEN}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
@@ -43,7 +43,7 @@ services:
       - default
     restart: unless-stopped
     depends_on:
-      - sc-poller
+      - safetyculture-poller
       - wwcc-transformer
 
   compliance-notification-router:

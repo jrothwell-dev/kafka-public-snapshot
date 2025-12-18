@@ -11,12 +11,12 @@
       "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
       "type": "stat",
       "title": "raw.safetyculture.credentials",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "sum(kafka_topic_partition_current_offset{topic=\"raw.safetyculture.credentials\"})",
           "refId": "A",
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -39,12 +39,12 @@
       "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
       "type": "stat",
       "title": "processed.wwcc.status",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "sum(kafka_topic_partition_current_offset{topic=\"processed.wwcc.status\"})",
           "refId": "A",
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -67,12 +67,12 @@
       "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
       "type": "stat",
       "title": "events.compliance.issues",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "sum(kafka_topic_partition_current_offset{topic=\"events.compliance.issues\"})",
           "refId": "A",
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -95,12 +95,12 @@
       "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
       "type": "stat",
       "title": "commands.notifications",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "sum(kafka_topic_partition_current_offset{topic=\"commands.notifications\"})",
           "refId": "A",
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -123,13 +123,13 @@
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
       "type": "timeseries",
       "title": "Consumer Group Lag",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "kafka_consumer_lag_sum",
           "refId": "A",
           "legendFormat": "{{consumer_group}}",
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -168,14 +168,14 @@
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
       "type": "table",
       "title": "Service Container Status",
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "datasource": {"type": "prometheus"},
       "targets": [
         {
           "expr": "up{job=~\"kafka-exporter|postgres-exporter|redis-exporter\"}",
           "refId": "A",
           "format": "table",
           "instant": true,
-          "datasource": {"type": "prometheus", "uid": "prometheus"}
+          "datasource": {"type": "prometheus"}
         }
       ],
       "fieldConfig": {
@@ -218,12 +218,12 @@
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
       "type": "logs",
       "title": "Recent Log Entries",
-      "datasource": {"type": "loki", "uid": "loki"},
+      "datasource": {"type": "loki"},
       "targets": [
         {
-          "expr": "{container_name=~\"sc-poller|wwcc-transformer|wwcc-compliance-monitor|compliance-notification-router\"}",
+          "expr": "{container_name=~\"safetyculture-poller|wwcc-transformer|wwcc-compliance-monitor|compliance-notification-router\"}",
           "refId": "A",
-          "datasource": {"type": "loki", "uid": "loki"}
+          "datasource": {"type": "loki"}
         }
       ],
       "options": {

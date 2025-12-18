@@ -7,7 +7,7 @@ endif
 export DOCKER_BUILDKIT=1
 
 # Service names
-SERVICES = sc-poller wwcc-transformer wwcc-compliance-monitor compliance-notification-router
+SERVICES = safetyculture-poller wwcc-transformer wwcc-compliance-monitor compliance-notification-router
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
 KAFKA_CONTAINER = kafka
@@ -27,7 +27,7 @@ TOPICS = \
 .PHONY: help \
 	up down reset clean \
 	services services-build services-up services-down services-restart services-logs \
-	sc-poller-build sc-poller-up sc-poller-down sc-poller-restart sc-poller-logs sc-poller-rebuild \
+	safetyculture-poller-build safetyculture-poller-up safetyculture-poller-down safetyculture-poller-restart safetyculture-poller-logs safetyculture-poller-rebuild \
 	wwcc-transformer-build wwcc-transformer-up wwcc-transformer-down wwcc-transformer-restart wwcc-transformer-logs wwcc-transformer-rebuild \
 	wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-down wwcc-compliance-monitor-restart wwcc-compliance-monitor-logs wwcc-compliance-monitor-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
@@ -173,26 +173,26 @@ services-logs:
 # Individual Service Commands
 # ============================================================================
 
-# sc-poller
-sc-poller-build:
-	@echo "🔨 Building sc-poller..."
-	@docker-compose -f $(SERVICES_FILE) build sc-poller
-	@echo "✅ sc-poller built"
+# safetyculture-poller
+safetyculture-poller-build:
+	@echo "🔨 Building safetyculture-poller..."
+	@docker-compose -f $(SERVICES_FILE) build safetyculture-poller
+	@echo "✅ safetyculture-poller built"
 
-sc-poller-up:
-	@echo "🚀 Starting sc-poller..."
-	@docker-compose -f $(SERVICES_FILE) up -d sc-poller
-	@echo "✅ sc-poller started"
+safetyculture-poller-up:
+	@echo "🚀 Starting safetyculture-poller..."
+	@docker-compose -f $(SERVICES_FILE) up -d safetyculture-poller
+	@echo "✅ safetyculture-poller started"
 
-sc-poller-down:
-	@docker-compose -f $(SERVICES_FILE) stop sc-poller
+safetyculture-poller-down:
+	@docker-compose -f $(SERVICES_FILE) stop safetyculture-poller
 
-sc-poller-restart: sc-poller-down sc-poller-up
+safetyculture-poller-restart: safetyculture-poller-down safetyculture-poller-up
 
-sc-poller-logs:
-	@docker-compose -f $(SERVICES_FILE) logs -f sc-poller
+safetyculture-poller-logs:
+	@docker-compose -f $(SERVICES_FILE) logs -f safetyculture-poller
 
-sc-poller-rebuild: sc-poller-build sc-poller-up
+safetyculture-poller-rebuild: safetyculture-poller-build safetyculture-poller-up
 
 # wwcc-transformer
 wwcc-transformer-build:
@@ -384,7 +384,7 @@ status:
 	@docker ps --format "  {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "(kafka|redis|postgres|zookeeper|grafana|prometheus|traefik|loki)" || echo "  None running"
 	@echo ""
 	@echo "🔧 Services:"
-	@docker ps --format "  {{.Names}}\t{{.Status}}" | grep -E "(sc-poller|transformer|compliance)" || echo "  None running"
+	@docker ps --format "  {{.Names}}\t{{.Status}}" | grep -E "(safetyculture-poller|transformer|compliance)" || echo "  None running"
 	@echo ""
 	@echo "🌐 Dashboards:"
 	@echo "  Kafka UI:   http://localhost:8081"

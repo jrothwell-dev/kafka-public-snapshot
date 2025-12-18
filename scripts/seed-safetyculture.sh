@@ -209,7 +209,7 @@ if [ -z "$WWCC_TYPE_ID" ]; then
   echo -e "${BLUE}   1. Go to SafetyCulture web app${NC}"
   echo -e "${BLUE}   2. Navigate to Credentials section${NC}"
   echo -e "${BLUE}   3. Create credentials for test users with appropriate expiry dates${NC}"
-  echo -e "${BLUE}   4. Then sc-poller will pick them up automatically${NC}"
+  echo -e "${BLUE}   4. Then safetyculture-poller will pick them up automatically${NC}"
   echo ""
   exit 1
 else
@@ -279,7 +279,7 @@ for email in "${!USER_SCENARIOS[@]}"; do
     echo -e "  ${RED}❌ Failed to create/update credential${NC}"
     echo -e "  ${YELLOW}   Note: SafetyCulture API may not support creating credentials programmatically${NC}"
     echo -e "  ${YELLOW}   You may need to create credentials manually in SafetyCulture UI${NC}"
-    echo -e "  ${YELLOW}   Then sc-poller will pick them up automatically${NC}"
+    echo -e "  ${YELLOW}   Then safetyculture-poller will pick them up automatically${NC}"
     ((FAIL_COUNT++))
   fi
   echo ""
@@ -300,7 +300,7 @@ echo ""
 
 if [ $SUCCESS_COUNT -gt 0 ]; then
   echo -e "${GREEN}✓ Credentials pushed to SafetyCulture${NC}"
-  echo -e "${BLUE}  sc-poller will pick up these credentials on its next poll${NC}"
+  echo -e "${BLUE}  safetyculture-poller will pick up these credentials on its next poll${NC}"
   echo ""
 fi
 
@@ -318,7 +318,7 @@ if [ $FAIL_COUNT -gt 0 ]; then
   echo -e "${BLUE}      - Zack: expiring (2024-12-20)${NC}"
   echo -e "${BLUE}      - Stephen: valid (2026-12-31)${NC}"
   echo -e "${BLUE}      - Steve: pending approval${NC}"
-  echo -e "${BLUE}   3. sc-poller will automatically fetch them on next poll${NC}"
+  echo -e "${BLUE}   3. safetyculture-poller will automatically fetch them on next poll${NC}"
   echo ""
 fi
 

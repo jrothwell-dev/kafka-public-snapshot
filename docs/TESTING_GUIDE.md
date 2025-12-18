@@ -25,7 +25,7 @@ This guide walks you through using the new SafetyCulture API seeding functionali
 
 ### Option 1: Full Test with SafetyCulture API (Recommended)
 
-This pushes real credentials to SafetyCulture, which sc-poller will then fetch.
+This pushes real credentials to SafetyCulture, which safetyculture-poller will then fetch.
 
 ```bash
 # 1. Set your API token
@@ -34,7 +34,7 @@ export SAFETYCULTURE_API_TOKEN=your_token_here
 # 2. Start infrastructure (if not already running)
 make up
 
-# 3. Start services (sc-poller will fetch from SafetyCulture)
+# 3. Start services (safetyculture-poller will fetch from SafetyCulture)
 make services-up
 
 # 4. Push credentials to SafetyCulture API
@@ -46,9 +46,9 @@ make seed-safetyculture
 # - Creates/updates credentials with test scenarios
 # - Shows success/failure for each user
 
-# 5. Wait for sc-poller to fetch (polls every 5 minutes by default)
-# Or trigger manually by restarting sc-poller:
-make sc-poller-restart
+# 5. Wait for safetyculture-poller to fetch (polls every 5 minutes by default)
+# Or trigger manually by restarting safetyculture-poller:
+make safetyculture-poller-restart
 
 # 6. Seed reference data (users and rules) to Kafka
 make test-seed
@@ -133,7 +133,7 @@ The test data includes 5 users with different compliance states:
 ### Check Kafka Topics
 
 ```bash
-# Watch credentials being fetched by sc-poller
+# Watch credentials being fetched by safetyculture-poller
 make watch-raw.safetyculture.credentials
 
 # Watch transformed WWCC status
@@ -199,13 +199,13 @@ export SAFETYCULTURE_API_TOKEN=your_token_here
 3. User doesn't have permission to create credentials
    - **Fix**: Ensure service user has appropriate permissions
 
-### Issue: sc-poller not picking up credentials
+### Issue: safetyculture-poller not picking up credentials
 
 **Check**:
-1. Is sc-poller running? `docker ps | grep sc-poller`
-2. Check sc-poller logs: `make sc-poller-logs`
+1. Is safetyculture-poller running? `docker ps | grep safetyculture-poller`
+2. Check safetyculture-poller logs: `make safetyculture-poller-logs`
 3. Wait for next poll cycle (default: 5 minutes)
-4. Or restart sc-poller: `make sc-poller-restart`
+4. Or restart safetyculture-poller: `make safetyculture-poller-restart`
 
 ### Issue: No messages in topics
 
@@ -231,7 +231,7 @@ export SAFETYCULTURE_API_TOKEN=your_token
 make up
 make services-up
 make seed-safetyculture
-sleep 60  # Wait for sc-poller to fetch
+sleep 60  # Wait for safetyculture-poller to fetch
 make test-seed  # Seed reference data
 make test-verify
 ```

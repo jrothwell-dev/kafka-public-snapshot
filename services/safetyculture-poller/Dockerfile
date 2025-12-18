@@ -23,4 +23,4 @@ WORKDIR /app
 COPY --from=builder /build/target/universal/stage ./
 
 # The sbt-native-packager creates a bin/ directory with startup scripts
-ENTRYPOINT ["./bin/sc-poller"]
+ENTRYPOINT ["./bin/safetyculture-poller"]

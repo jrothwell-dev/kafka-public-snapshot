@@ -33,7 +33,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/${{ github.repository }}/sc-poller
+            ghcr.io/${{ github.repository }}/safetyculture-poller
             ghcr.io/${{ github.repository }}/wwcc-transformer
             ghcr.io/${{ github.repository }}/wwcc-compliance-monitor
             ghcr.io/${{ github.repository }}/compliance-notification-router
@@ -45,13 +45,13 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
       
-      - name: Build and push sc-poller
+      - name: Build and push safetyculture-poller
         uses: docker/build-push-action@v5
         with:
-          context: ./services/sc-poller
-          file: ./services/sc-poller/Dockerfile
+          context: ./services/safetyculture-poller
+          file: ./services/safetyculture-poller/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/sc-poller:latest,ghcr.io/${{ github.repository }}/sc-poller:${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}/safetyculture-poller:latest,ghcr.io/${{ github.repository }}/safetyculture-poller:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       

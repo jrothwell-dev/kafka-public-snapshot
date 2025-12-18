@@ -38,7 +38,7 @@ if [ "$LOCAL_ONLY" = false ] && [ -n "$SAFETYCULTURE_API_TOKEN" ]; then
   if "$SCRIPT_DIR/seed-safetyculture.sh"; then
     echo -e "${GREEN}✓ SafetyCulture API seeding complete${NC}"
     echo ""
-    echo -e "${BLUE}Note: Credentials pushed to SafetyCulture. sc-poller will pick them up.${NC}"
+    echo -e "${BLUE}Note: Credentials pushed to SafetyCulture. safetyculture-poller will pick them up.${NC}"
     echo -e "${BLUE}      Continuing with Kafka seeding for reference data...${NC}"
     echo ""
   else
@@ -110,7 +110,7 @@ echo ""
 
 # Step 4: Seed mock credentials (4 users - not Sarah)
 # Only seed directly to Kafka if we're in local-only mode or API token not available
-# Otherwise, sc-poller will pick up the real data from SafetyCulture
+# Otherwise, safetyculture-poller will pick up the real data from SafetyCulture
 if [ "$LOCAL_ONLY" = true ] || [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
   echo -e "${YELLOW}[4/4] Seeding raw.safetyculture.credentials with mock data...${NC}"
 
@@ -141,7 +141,7 @@ done
 else
   echo -e "${YELLOW}[4/4] Skipping direct Kafka credential seeding...${NC}"
   echo -e "${BLUE}   Credentials were pushed to SafetyCulture API${NC}"
-  echo -e "${BLUE}   sc-poller will pick them up on its next poll${NC}"
+  echo -e "${BLUE}   safetyculture-poller will pick them up on its next poll${NC}"
   echo ""
 fi
 
@@ -166,7 +166,7 @@ if [ "$LOCAL_ONLY" = true ] || [ -z "$SAFETYCULTURE_API_TOKEN" ]; then
   echo "    - Jordan, Zack, Stephen, Steve (not Emma - she's MISSING scenario)"
 else
   echo "  • Credentials pushed to SafetyCulture API"
-  echo "    - sc-poller will fetch them on next poll"
+  echo "    - safetyculture-poller will fetch them on next poll"
 fi
 echo ""
 echo "Next step: Run 'make test-verify' to check the pipeline"
