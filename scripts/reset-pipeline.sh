@@ -44,8 +44,24 @@ for topic in "${TOPICS[@]}"; do
     2>/dev/null || true
 done
 
-# Wait for topics to be fully deleted
-sleep 3
+# Wait for topics to be fully deleted (check that they're gone)
+echo "  Waiting for topic deletion to complete..."
+MAX_WAIT=30
+WAITED=0
+while [ $WAITED -lt $MAX_WAIT ]; do
+  REMAINING=$(docker exec "$KAFKA_CONTAINER" kafka-topics --list --bootstrap-server "$KAFKA_BOOTSTRAP" 2>/dev/null | grep -E "^(reference\.|raw\.|processed\.|events\.|commands\.)" | wc -l)
+  if [ "$REMAINING" -eq 0 ]; then
+    echo "  All topics deleted"
+    break
+  fi
+  sleep 2
+  WAITED=$((WAITED + 2))
+done
+
+if [ $WAITED -ge $MAX_WAIT ]; then
+  echo -e "${YELLOW}  Warning: Some topics may not have been fully deleted${NC}"
+fi
+
 echo -e "${GREEN}✓ Topics deleted${NC}"
 echo ""
 

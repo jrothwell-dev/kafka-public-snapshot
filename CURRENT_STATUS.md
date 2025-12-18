@@ -24,6 +24,10 @@
   - Created install-hooks.sh installer script
   - Added make install-hooks target for easy installation
   - Prevents broken code from being pushed to repository
+- [x] Fixed reset-pipeline.sh topic deletion timing
+  - Replaced simple 3-second sleep with proper wait loop that checks if topics are actually deleted
+  - Waits up to 30 seconds, checking every 2 seconds for remaining topics
+  - Prevents "already exists" errors when recreating topics
 
 ## Next Up
 
