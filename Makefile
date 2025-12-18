@@ -7,7 +7,7 @@ endif
 export DOCKER_BUILDKIT=1
 
 # Service names
-SERVICES = safetyculture-poller wwcc-transformer wwcc-compliance-monitor compliance-notification-router
+SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
 KAFKA_CONTAINER = kafka
@@ -29,10 +29,9 @@ TOPICS = \
 	services services-build services-up services-down services-restart services-logs \
 	safetyculture-poller-build safetyculture-poller-up safetyculture-poller-down safetyculture-poller-restart safetyculture-poller-logs safetyculture-poller-rebuild \
 	wwcc-transformer-build wwcc-transformer-up wwcc-transformer-down wwcc-transformer-restart wwcc-transformer-logs wwcc-transformer-rebuild \
-	wwcc-compliance-monitor-build wwcc-compliance-monitor-up wwcc-compliance-monitor-down wwcc-compliance-monitor-restart wwcc-compliance-monitor-logs wwcc-compliance-monitor-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
-	seed seed-rules seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
+	seed seed-safetyculture seed-safetyculture-debug seed-all rebuild-all \
 	test-reset test-seed test-verify test-full test-watch \
 	ci-test ci-build \
 	status health logs watch \
@@ -78,7 +77,6 @@ help:
 	@echo ""
 	@echo "🌱 Data Seeding:"
 	@echo "  make seed            - Seed required WWCC users"
-	@echo "  make seed-rules      - Seed compliance rules"
 	@echo "  make seed-safetyculture - Push credentials to SafetyCulture API"
 	@echo "  make seed-safetyculture-debug - Push with debug output"
 	@echo "  make seed-all       - Seed all test data"
@@ -215,27 +213,6 @@ wwcc-transformer-logs:
 
 wwcc-transformer-rebuild: wwcc-transformer-build wwcc-transformer-up
 
-# wwcc-compliance-monitor
-wwcc-compliance-monitor-build:
-	@echo "🔨 Building wwcc-compliance-monitor..."
-	@docker-compose -f $(SERVICES_FILE) build wwcc-compliance-monitor
-	@echo "✅ wwcc-compliance-monitor built"
-
-wwcc-compliance-monitor-up:
-	@echo "🚀 Starting wwcc-compliance-monitor..."
-	@docker-compose -f $(SERVICES_FILE) up -d wwcc-compliance-monitor
-	@echo "✅ wwcc-compliance-monitor started"
-
-wwcc-compliance-monitor-down:
-	@docker-compose -f $(SERVICES_FILE) stop wwcc-compliance-monitor
-
-wwcc-compliance-monitor-restart: wwcc-compliance-monitor-down wwcc-compliance-monitor-up
-
-wwcc-compliance-monitor-logs:
-	@docker-compose -f $(SERVICES_FILE) logs -f wwcc-compliance-monitor
-
-wwcc-compliance-monitor-rebuild: wwcc-compliance-monitor-build wwcc-compliance-monitor-up
-
 # compliance-notification-router
 compliance-notification-router-build:
 	@echo "🔨 Building compliance-notification-router..."
@@ -322,15 +299,6 @@ seed:
 		docker exec -i $(KAFKA_CONTAINER) kafka-console-producer --topic reference.wwcc.required --bootstrap-server $(KAFKA_BOOTSTRAP)
 	@echo "✅ Seeded required WWCC users list"
 
-seed-rules:
-	@echo "🌱 Seeding compliance rules..."
-	@if [ ! -f services/wwcc-compliance-monitor/compliance-rules.json ]; then \
-		echo "❌ ERROR: compliance-rules.json not found"; \
-		exit 1; \
-	fi
-	@cat services/wwcc-compliance-monitor/compliance-rules.json | jq -c '.' | docker exec -i $(KAFKA_CONTAINER) kafka-console-producer --topic reference.compliance.rules --bootstrap-server $(KAFKA_BOOTSTRAP)
-	@echo "✅ Seeded compliance notification rules"
-
 seed-safetyculture:
 	@echo "🌱 Pushing credentials to SafetyCulture API..."
 	@./scripts/seed-safetyculture.sh
@@ -341,7 +309,7 @@ seed-safetyculture-debug:
 	@./scripts/seed-safetyculture.sh --debug
 	@echo "✅ SafetyCulture seeding complete (debug mode)"
 
-seed-all: seed seed-rules
+seed-all: seed
 	@echo "✅ All test data seeded"
 
 # ============================================================================

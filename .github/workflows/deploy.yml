@@ -35,7 +35,6 @@ jobs:
           images: |
             ghcr.io/${{ github.repository }}/safetyculture-poller
             ghcr.io/${{ github.repository }}/wwcc-transformer
-            ghcr.io/${{ github.repository }}/wwcc-compliance-monitor
             ghcr.io/${{ github.repository }}/compliance-notification-router
           tags: |
             type=ref,event=branch
@@ -62,16 +61,6 @@ jobs:
           file: ./services/wwcc-transformer/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository }}/wwcc-transformer:latest,ghcr.io/${{ github.repository }}/wwcc-transformer:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      
-      - name: Build and push wwcc-compliance-monitor
-        uses: docker/build-push-action@v5
-        with:
-          context: ./services/wwcc-compliance-monitor
-          file: ./services/wwcc-compliance-monitor/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/wwcc-compliance-monitor:latest,ghcr.io/${{ github.repository }}/wwcc-compliance-monitor:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       

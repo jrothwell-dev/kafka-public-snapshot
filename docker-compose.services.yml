@@ -31,21 +31,6 @@ services:
       - default
     restart: unless-stopped
 
-  wwcc-compliance-monitor:
-    build:
-      context: ./services/wwcc-compliance-monitor
-      dockerfile: Dockerfile
-    container_name: wwcc-compliance-monitor
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      REDIS_HOST: redis
-    networks:
-      - default
-    restart: unless-stopped
-    depends_on:
-      - safetyculture-poller
-      - wwcc-transformer
-
   compliance-notification-router:
     build:
       context: ./services/compliance-notification-router
@@ -57,7 +42,7 @@ services:
       - default
     restart: unless-stopped
     depends_on:
-      - wwcc-compliance-monitor
+      - wwcc-transformer
 
 networks:
   default:

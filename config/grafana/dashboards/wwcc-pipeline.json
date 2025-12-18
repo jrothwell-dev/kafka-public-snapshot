@@ -221,7 +221,7 @@
       "datasource": {"type": "loki"},
       "targets": [
         {
-          "expr": "{container_name=~\"safetyculture-poller|wwcc-transformer|wwcc-compliance-monitor|compliance-notification-router\"}",
+          "expr": "{container_name=~\"safetyculture-poller|wwcc-transformer|compliance-notification-router\"}",
           "refId": "A",
           "datasource": {"type": "loki"}
         }

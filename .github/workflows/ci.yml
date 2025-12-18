@@ -79,7 +79,6 @@ jobs:
           docker-compose -f docker-compose.services.yml logs > logs/services.log 2>&1 || true
           docker logs safetyculture-poller > logs/safetyculture-poller.log 2>&1 || true
           docker logs wwcc-transformer > logs/wwcc-transformer.log 2>&1 || true
-          docker logs wwcc-compliance-monitor > logs/wwcc-compliance-monitor.log 2>&1 || true
           docker logs compliance-notification-router > logs/compliance-notification-router.log 2>&1 || true
           docker logs kafka > logs/kafka.log 2>&1 || true
       
