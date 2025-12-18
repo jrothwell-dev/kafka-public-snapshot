@@ -19,6 +19,11 @@
   - Added requiredUsersLoaded flag to prevent processing credentials until required users list is loaded
   - Prevents UNEXPECTED status for all credentials when they arrive before required users topic is consumed
   - Added once-per-minute logging when waiting for required users list
+- [x] Added git pre-push hook to enforce tests pass before pushing
+  - Created pre-push-hook.sh that runs all unit tests before allowing push
+  - Created install-hooks.sh installer script
+  - Added make install-hooks target for easy installation
+  - Prevents broken code from being pushed to repository
 
 ## Next Up
 

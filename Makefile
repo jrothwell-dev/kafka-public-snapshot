@@ -104,6 +104,9 @@ help:
 	@echo "  make ci-test         - Full CI test cycle (reset, seed, verify)"
 	@echo "  make ci-build        - Build all service Docker images"
 	@echo ""
+	@echo "🔧 Git Hooks:"
+	@echo "  make install-hooks   - Install git hooks (pre-push test validation)"
+	@echo ""
 	@echo "🔄 Rebuild & Setup:"
 	@echo "  make rebuild-all    - Rebuild all services, restart, and seed data"
 	@echo ""
@@ -488,6 +491,13 @@ ci-build:
 	@[ -n "$$SAFETYCULTURE_API_TOKEN" ] || (echo "⚠️  WARNING: SAFETYCULTURE_API_TOKEN not set, using dummy token for build"; export SAFETYCULTURE_API_TOKEN=dummy-token-for-build)
 	@$(MAKE) services-build
 	@echo "✅ All service images built"
+
+# ============================================================================
+# Git Hooks
+# ============================================================================
+
+install-hooks:
+	@./scripts/install-hooks.sh
 
 # ============================================================================
 # E2E Test Environment (Isolated)
