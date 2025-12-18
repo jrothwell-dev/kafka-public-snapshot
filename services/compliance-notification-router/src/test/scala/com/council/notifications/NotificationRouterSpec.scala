@@ -114,7 +114,12 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     command.userId should be(compliance.userId)
     command.userName should be("John Doe")
     command.issueType should be("EXPIRED")
-    command.email should be(config.override_recipient)
+    command.to should be(Seq(config.override_recipient))
+    command.cc should be(None)
+    command.bcc should be(None)
+    command.subject should include("WWCC Compliance Alert: EXPIRED")
+    command.subject should include("John Doe")
+    command.isHtml should be(true)
     command.template should be(config.template)
     command.data.wwccNumber should be(compliance.wwccNumber)
     command.data.expiryDate should be(compliance.expiryDate)
@@ -164,7 +169,7 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     command.userId should be(compliance.userId)
   }
   
-  it should "use override_recipient as email" in {
+  it should "use override_recipient as to address" in {
     val compliance = createCompliance()
     val overrideEmail = "override@test.com"
     val config = createTestConfig(overrideRecipient = overrideEmail)
@@ -175,8 +180,8 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
       compliance, config, notificationId, createdAt
     )
     
-    command.email should be(overrideEmail)
-    command.email should not be(compliance.email.get)
+    command.to should be(Seq(overrideEmail))
+    command.to should not contain(compliance.email.get)
   }
   
   it should "set correct priority based on status" in {

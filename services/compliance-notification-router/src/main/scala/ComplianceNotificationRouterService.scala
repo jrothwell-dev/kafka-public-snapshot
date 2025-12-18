@@ -50,10 +50,14 @@ case class NotificationCommand(
   notificationId: String,
   userId: String,
   userName: String,
-  email: String,
+  to: Seq[String],
+  cc: Option[Seq[String]],
+  bcc: Option[Seq[String]],
+  subject: String,
   issueType: String,
   priority: String,
   template: String,
+  isHtml: Boolean,
   data: NotificationData,
   createdAt: String
 )
@@ -98,15 +102,20 @@ object ComplianceNotificationRouterService {
   ): NotificationCommand = {
     val userName = s"${compliance.firstName} ${compliance.lastName}"
     val priority = getPriority(compliance.compliance_status, config)
+    val subject = s"WWCC Compliance Alert: ${compliance.compliance_status} - ${compliance.firstName} ${compliance.lastName}"
     
     NotificationCommand(
       notificationId = notificationId,
       userId = compliance.userId,
       userName = userName,
-      email = config.override_recipient,
+      to = Seq(config.override_recipient),
+      cc = None,
+      bcc = None,
+      subject = subject,
       issueType = compliance.compliance_status,
       priority = priority,
       template = config.template,
+      isHtml = true,
       data = NotificationData(
         wwccNumber = compliance.wwccNumber,
         expiryDate = compliance.expiryDate,
@@ -195,7 +204,7 @@ object ComplianceNotificationRouterService {
                     println(s"[INFO] Created notification: $notificationId")
                     println(s"      User: ${notificationCommand.userName} (${compliance.userId})")
                     println(s"      Issue: ${compliance.compliance_status} (priority: ${notificationCommand.priority})")
-                    println(s"      Email: ${config.override_recipient}")
+                    println(s"      To: ${notificationCommand.to.mkString(", ")}")
                     println(s"      Published to partition ${metadata.partition()} at offset ${metadata.offset()}")
                   } catch {
                     case e: Exception =>

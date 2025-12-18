@@ -23,10 +23,14 @@ case class NotificationCommand(
   notificationId: String,
   userId: String,
   userName: String,
-  email: String,
+  to: Seq[String],
+  cc: Option[Seq[String]],
+  bcc: Option[Seq[String]],
+  subject: String,
   issueType: String,
   priority: String,
   template: String,
+  isHtml: Boolean,
   data: NotificationData,
   createdAt: String
 )
@@ -47,11 +51,6 @@ object NotificationService {
   // Pure function: generates deduplication key for a notification
   def dedupKey(notificationId: String): String = {
     s"notification:sent:${notificationId}"
-  }
-  
-  // Pure function: creates email subject from notification command
-  def createSubject(command: NotificationCommand): String = {
-    s"WWCC Compliance Notification - ${command.issueType}"
   }
   
   // Pure function: creates email body from notification command
@@ -84,9 +83,12 @@ object NotificationService {
     smtpHost: String,
     smtpPort: Int,
     smtpFrom: String,
-    to: String,
+    to: Seq[String],
+    cc: Option[Seq[String]],
+    bcc: Option[Seq[String]],
     subject: String,
-    body: String
+    body: String,
+    isHtml: Boolean
   ): Either[String, Unit] = {
     try {
       val props = new Properties()
@@ -99,9 +101,30 @@ object NotificationService {
       val message = new MimeMessage(session)
       
       message.setFrom(new InternetAddress(smtpFrom))
-      message.setRecipient(Message.RecipientType.TO, new InternetAddress(to))
+      
+      // Set TO recipients
+      val toRecipients: Array[Address] = to.map(new InternetAddress(_)).toArray
+      message.setRecipients(Message.RecipientType.TO, toRecipients)
+      
+      // Set CC recipients if provided
+      cc.foreach { ccAddrs =>
+        val ccRecipients: Array[Address] = ccAddrs.map(new InternetAddress(_)).toArray
+        message.setRecipients(Message.RecipientType.CC, ccRecipients)
+      }
+      
+      // Set BCC recipients if provided
+      bcc.foreach { bccAddrs =>
+        val bccRecipients: Array[Address] = bccAddrs.map(new InternetAddress(_)).toArray
+        message.setRecipients(Message.RecipientType.BCC, bccRecipients)
+      }
+      
       message.setSubject(subject)
-      message.setText(body)
+      
+      if (isHtml) {
+        message.setContent(body, "text/html; charset=utf-8")
+      } else {
+        message.setText(body)
+      }
       
       Transport.send(message)
       Right(())
@@ -165,13 +188,24 @@ object NotificationService {
               if (!alreadyProcessed) {
                 println(s"[INFO] Processing notification: ${command.notificationId}")
                 println(s"      User: ${command.userName} (${command.userId})")
-                println(s"      Email: ${command.email}")
+                println(s"      To: ${command.to.mkString(", ")}")
+                command.cc.foreach(cc => println(s"      CC: ${cc.mkString(", ")}"))
+                command.bcc.foreach(bcc => println(s"      BCC: ${bcc.mkString(", ")}"))
                 println(s"      Issue: ${command.issueType} (priority: ${command.priority})")
                 
                 // Send email
-                val subject = createSubject(command)
                 val body = createBody(command)
-                val emailResult = sendEmail(smtpHost, smtpPort, smtpFrom, command.email, subject, body)
+                val emailResult = sendEmail(
+                  smtpHost, 
+                  smtpPort, 
+                  smtpFrom, 
+                  command.to, 
+                  command.cc, 
+                  command.bcc, 
+                  command.subject, 
+                  body, 
+                  command.isHtml
+                )
                 
                 // Create notification sent event
                 val sentAt = Instant.now().toString
@@ -180,7 +214,7 @@ object NotificationService {
                     NotificationSent(
                       notificationId = command.notificationId,
                       userId = command.userId,
-                      email = command.email,
+                      email = command.to.headOption.getOrElse(""),
                       issueType = command.issueType,
                       sentAt = sentAt,
                       success = true,
@@ -190,7 +224,7 @@ object NotificationService {
                     NotificationSent(
                       notificationId = command.notificationId,
                       userId = command.userId,
-                      email = command.email,
+                      email = command.to.headOption.getOrElse(""),
                       issueType = command.issueType,
                       sentAt = sentAt,
                       success = false,

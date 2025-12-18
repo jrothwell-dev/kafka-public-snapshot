@@ -11,10 +11,14 @@ class NotificationServiceSpec extends AnyFlatSpec with Matchers {
     notificationId: String = "test-notification-id",
     userId: String = "user123",
     userName: String = "John Doe",
-    email: String = "john.doe@example.com",
+    to: Seq[String] = Seq("john.doe@example.com"),
+    cc: Option[Seq[String]] = None,
+    bcc: Option[Seq[String]] = None,
+    subject: String = "WWCC Compliance Alert: EXPIRED - John Doe",
     issueType: String = "EXPIRED",
     priority: String = "HIGH",
     template: String = "compliance-alert.txt",
+    isHtml: Boolean = true,
     wwccNumber: Option[String] = Some("WWC123456"),
     expiryDate: Option[String] = Some("2024-01-01"),
     daysUntilExpiry: Option[Long] = Some(-10)
@@ -23,10 +27,14 @@ class NotificationServiceSpec extends AnyFlatSpec with Matchers {
       notificationId = notificationId,
       userId = userId,
       userName = userName,
-      email = email,
+      to = to,
+      cc = cc,
+      bcc = bcc,
+      subject = subject,
       issueType = issueType,
       priority = priority,
       template = template,
+      isHtml = isHtml,
       data = NotificationData(
         wwccNumber = wwccNumber,
         expiryDate = expiryDate,
@@ -62,34 +70,61 @@ class NotificationServiceSpec extends AnyFlatSpec with Matchers {
     key should be(s"notification:sent:$uuid")
   }
   
-  // ========== Email Subject Tests ==========
+  // ========== Notification Command Model Tests ==========
   
-  "createSubject" should "create subject with issue type for EXPIRED" in {
-    val command = createNotificationCommand(issueType = "EXPIRED")
-    val subject = NotificationService.createSubject(command)
+  "NotificationCommand" should "support multiple TO recipients" in {
+    val command = createNotificationCommand(
+      to = Seq("user1@example.com", "user2@example.com", "user3@example.com")
+    )
     
-    subject should be("WWCC Compliance Notification - EXPIRED")
+    command.to should have size 3
+    command.to should contain("user1@example.com")
+    command.to should contain("user2@example.com")
+    command.to should contain("user3@example.com")
   }
   
-  it should "create subject with issue type for EXPIRING" in {
-    val command = createNotificationCommand(issueType = "EXPIRING")
-    val subject = NotificationService.createSubject(command)
+  it should "support CC recipients" in {
+    val command = createNotificationCommand(
+      cc = Some(Seq("cc1@example.com", "cc2@example.com"))
+    )
     
-    subject should be("WWCC Compliance Notification - EXPIRING")
+    command.cc should be(Some(Seq("cc1@example.com", "cc2@example.com")))
   }
   
-  it should "create subject with issue type for MISSING" in {
-    val command = createNotificationCommand(issueType = "MISSING")
-    val subject = NotificationService.createSubject(command)
+  it should "support BCC recipients" in {
+    val command = createNotificationCommand(
+      bcc = Some(Seq("bcc1@example.com", "bcc2@example.com"))
+    )
     
-    subject should be("WWCC Compliance Notification - MISSING")
+    command.bcc should be(Some(Seq("bcc1@example.com", "bcc2@example.com")))
   }
   
-  it should "create subject with issue type for NOT_APPROVED" in {
-    val command = createNotificationCommand(issueType = "NOT_APPROVED")
-    val subject = NotificationService.createSubject(command)
+  it should "support CC and BCC together" in {
+    val command = createNotificationCommand(
+      to = Seq("to@example.com"),
+      cc = Some(Seq("cc@example.com")),
+      bcc = Some(Seq("bcc@example.com"))
+    )
     
-    subject should be("WWCC Compliance Notification - NOT_APPROVED")
+    command.to should be(Seq("to@example.com"))
+    command.cc should be(Some(Seq("cc@example.com")))
+    command.bcc should be(Some(Seq("bcc@example.com")))
+  }
+  
+  it should "have explicit subject field" in {
+    val command = createNotificationCommand(
+      subject = "Custom Subject Line"
+    )
+    
+    command.subject should be("Custom Subject Line")
+  }
+  
+  it should "support HTML content flag" in {
+    val htmlCommand = createNotificationCommand(isHtml = true)
+    htmlCommand.isHtml should be(true)
+    
+    val textCommand = createNotificationCommand(isHtml = false)
+    textCommand.isHtml should be(false)
   }
   
   // ========== Email Body Tests ==========
