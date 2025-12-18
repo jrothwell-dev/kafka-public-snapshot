@@ -35,4 +35,5 @@
   - Created `scripts/test-e2e.sh` for full E2E test execution
   - Added Makefile targets: `test-e2e`, `test-e2e-up`, `test-e2e-down`, `test-e2e-logs`
   - Test environment can run alongside production without interference
+  - Fixed hostname resolution: added `hostname: redis` to test-redis and proper healthcheck-based `depends_on` for all test services to prevent race conditions
 
