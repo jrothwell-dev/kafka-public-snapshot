@@ -79,6 +79,86 @@ object WwccTransformerService {
     md.digest(text.getBytes).map("%02x".format(_)).mkString
   }
   
+  // Pure function: determines compliance status based on various conditions
+  def determineComplianceStatus(
+    expiryStatus: String,
+    approvalStatus: String,
+    isInRequiredList: Boolean,
+    daysUntilStart: Option[Long]
+  ): String = {
+    if (!isInRequiredList) {
+      "UNEXPECTED"
+    } else if (approvalStatus != "DOCUMENT_APPROVAL_STATUS_APPROVED") {
+      "NOT_APPROVED"
+    } else if (daysUntilStart.exists(_ < 0)) {
+      "NOT_STARTED"
+    } else expiryStatus match {
+      case "EXPIRY_STATUS_EXPIRED" => "EXPIRED"
+      case "EXPIRY_STATUS_EXPIRING_SOON" => "EXPIRING"
+      case _ => "COMPLIANT"
+    }
+  }
+  
+  // Pure function: calculates days until expiry from a reference date
+  def calculateDaysUntilExpiry(expiryDate: Option[ExpiryDate], referenceDate: LocalDate): Option[Long] = {
+    expiryDate.flatMap { exp =>
+      try {
+        Some(ChronoUnit.DAYS.between(referenceDate, exp.toLocalDate))
+      } catch {
+        case _: Exception => None
+      }
+    }
+  }
+  
+  // Pure function: calculates days since start from a reference date
+  def calculateDaysSinceStart(startDate: Option[String], referenceDate: LocalDate): Option[Long] = {
+    startDate.flatMap { dateStr =>
+      try {
+        Some(ChronoUnit.DAYS.between(LocalDate.parse(dateStr), referenceDate))
+      } catch {
+        case _: Exception => None
+      }
+    }
+  }
+  
+  // Pure function: finds matching user from required users list
+  def findMatchingUser(cred: Credential, requiredUsers: List[RequiredUser]): Option[RequiredUser] = {
+    val credFirstName = cred.subject_user.first_name.toLowerCase.trim
+    val credLastName = cred.subject_user.last_name.toLowerCase.trim
+    
+    requiredUsers.find { user =>
+      user.firstName.toLowerCase.trim == credFirstName && 
+      user.lastName.toLowerCase.trim == credLastName
+    }
+  }
+  
+  // Pure function: generates flags based on compliance status and other conditions
+  def generateFlags(
+    complianceStatus: String,
+    hasCredentialNumber: Boolean,
+    daysUntilStart: Option[Long]
+  ): List[String] = {
+    val flags = mutable.ListBuffer[String]()
+    
+    if (complianceStatus == "UNEXPECTED") {
+      flags += "NOT_IN_REQUIRED_LIST"
+    } else if (complianceStatus == "NOT_APPROVED") {
+      flags += "APPROVAL_PENDING"
+    } else if (complianceStatus == "NOT_STARTED") {
+      flags += "NOT_YET_STARTED"
+    } else if (complianceStatus == "EXPIRED") {
+      flags += "WWCC_EXPIRED"
+    } else if (complianceStatus == "EXPIRING") {
+      flags += "EXPIRING_WITHIN_30_DAYS"
+    }
+    
+    if (!hasCredentialNumber) {
+      flags += "NO_CREDENTIAL_NUMBER"
+    }
+    
+    flags.toList
+  }
+  
   def main(args: Array[String]): Unit = {
     val kafkaBootstrap = sys.env.getOrElse("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     val redisHost = sys.env.getOrElse("REDIS_HOST", "redis")
@@ -174,45 +254,27 @@ object WwccTransformerService {
                 // Try multiple matching strategies
                 val matchedUser = findMatchingUser(cred, currentRequiredUsers.values.toList)
                 
-                val expiryDays = try {
-                  cred.attributes.expiry_period_end_date.map { exp =>
-                    ChronoUnit.DAYS.between(LocalDate.now(), exp.toLocalDate)
-                  }
-                } catch {
-                  case _: Exception => None
-                }
+                val now = LocalDate.now()
+                val expiryDays = calculateDaysUntilExpiry(cred.attributes.expiry_period_end_date, now)
                 
                 val startDays = matchedUser.flatMap(u => 
-                  try Some(ChronoUnit.DAYS.between(LocalDate.parse(u.startDate), LocalDate.now()))
-                  catch { case _: Exception => None }
+                  calculateDaysSinceStart(Some(u.startDate), now)
                 )
                 
-                val flags = mutable.ListBuffer[String]()
+                // Determine compliance status
+                val complianceStatus = determineComplianceStatus(
+                  expiryStatus = cred.metadata.expiry_status,
+                  approvalStatus = cred.metadata.approval.status,
+                  isInRequiredList = matchedUser.isDefined,
+                  daysUntilStart = startDays
+                )
                 
-                // Determine compliance status and flags
-                val complianceStatus = if (matchedUser.isEmpty) {
-                  flags += "NOT_IN_REQUIRED_LIST"
-                  "UNEXPECTED"
-                } else if (cred.metadata.approval.status != "DOCUMENT_APPROVAL_STATUS_APPROVED") {
-                  flags += "APPROVAL_PENDING"
-                  "NOT_APPROVED"
-                } else if (startDays.exists(_ < 0)) {
-                  flags += "NOT_YET_STARTED"
-                  "NOT_STARTED"
-                } else cred.metadata.expiry_status match {
-                  case "EXPIRY_STATUS_EXPIRED" => 
-                    flags += "WWCC_EXPIRED"
-                    "EXPIRED"
-                  case "EXPIRY_STATUS_EXPIRING_SOON" => 
-                    flags += "EXPIRING_WITHIN_30_DAYS"
-                    "EXPIRING"
-                  case _ => 
-                    "COMPLIANT"
-                }
-                
-                if (cred.attributes.credential_number.isEmpty) {
-                  flags += "NO_CREDENTIAL_NUMBER"
-                }
+                // Generate flags
+                val flags = generateFlags(
+                  complianceStatus = complianceStatus,
+                  hasCredentialNumber = cred.attributes.credential_number.isDefined,
+                  daysUntilStart = startDays
+                )
                 
                 val compliance = WwccCompliance(
                   userId = cred.subject_user_id,
@@ -284,16 +346,6 @@ object WwccTransformerService {
     }
   }
   
-  def findMatchingUser(cred: Credential, requiredUsers: List[RequiredUser]): Option[RequiredUser] = {
-    val credFirstName = cred.subject_user.first_name.toLowerCase.trim
-    val credLastName = cred.subject_user.last_name.toLowerCase.trim
-    
-    requiredUsers.find { user =>
-      user.firstName.toLowerCase.trim == credFirstName && 
-      user.lastName.toLowerCase.trim == credLastName
-    }
-  }
-  
   def checkMissingWwcc(
     requiredUsers: Map[String, RequiredUser],
     jedisPool: JedisPool,
@@ -316,11 +368,8 @@ object WwccTransformerService {
           
           if (!hasCredential) {
             // Calculate days since start date
-            val startDays = try {
-              Some(ChronoUnit.DAYS.between(LocalDate.parse(user.startDate), LocalDate.now()))
-            } catch {
-              case _: Exception => None
-            }
+            val now = LocalDate.now()
+            val startDays = calculateDaysSinceStart(Some(user.startDate), now)
             
             // Create a synthetic user ID based on email hash for missing users
             val userId = md5Hash(user.email).take(16)
