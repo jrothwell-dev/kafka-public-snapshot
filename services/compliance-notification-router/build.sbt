@@ -5,6 +5,13 @@ scalaVersion := "2.13.12"
 // Enable the native packager plugin
 enablePlugins(JavaAppPackaging)
 
+lazy val root = (project in file("."))
+  .configs(IntegrationTest)
+  .settings(
+    Defaults.itSettings,
+    IntegrationTest / fork := true
+  )
+
 libraryDependencies ++= Seq(
   "org.apache.kafka" % "kafka-clients" % "3.5.1",
   "com.typesafe" % "config" % "1.4.2",
@@ -19,5 +26,7 @@ libraryDependencies ++= Seq(
   "redis.clients" % "jedis" % "5.0.0",
   
   // Testing
-  "org.scalatest" %% "scalatest" % "3.2.17" % Test
+  "org.scalatest" %% "scalatest" % "3.2.17" % "test,it",
+  "com.dimafeng" %% "testcontainers-scala-scalatest" % "0.41.0" % "test,it",
+  "com.dimafeng" %% "testcontainers-scala-kafka" % "0.41.0" % "test,it"
 )
