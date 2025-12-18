@@ -204,9 +204,11 @@ object WwccTransformerService {
     
     // State tracking
     var currentRequiredUsers: Map[String, RequiredUser] = Map.empty
+    var requiredUsersLoaded: Boolean = false
     val knownCredentials = mutable.Set[String]()
     var lastRequiredUpdate: Option[String] = None
     var lastMissingCheck = System.currentTimeMillis()
+    var lastWaitingLog: Long = 0
     
     println("[INFO] Service ready, processing messages...")
     
@@ -223,6 +225,7 @@ object WwccTransformerService {
                   s"${user.firstName.toLowerCase}_${user.lastName.toLowerCase}" -> user
                 }.toMap
                 lastRequiredUpdate = Some(usersList.timestamp)
+                requiredUsersLoaded = true
                 println(s"[INFO] Updated required users list: ${usersList.requiredUsers.size} users")
                 
                 // Clear known credentials to force re-check of all users
@@ -245,11 +248,21 @@ object WwccTransformerService {
         
         // Read credentials
         val credRecords = credentialConsumer.poll(Duration.ofMillis(100))
+        if (!requiredUsersLoaded && !credRecords.isEmpty) {
+          val now = System.currentTimeMillis()
+          if (now - lastWaitingLog > 60000) {
+            println("[INFO] Waiting for required users list before processing credentials...")
+            lastWaitingLog = now
+          }
+        }
         credRecords.asScala.foreach { record =>
-          try {
-            decode[CredentialMessage](record.value()) match {
-              case Right(msg) =>
-                val cred = msg.credential
+          if (!requiredUsersLoaded) {
+            // Skip processing until required users are loaded
+          } else {
+            try {
+              decode[CredentialMessage](record.value()) match {
+                case Right(msg) =>
+                  val cred = msg.credential
                 
                 // Try multiple matching strategies
                 val matchedUser = findMatchingUser(cred, currentRequiredUsers.values.toList)
@@ -317,12 +330,13 @@ object WwccTransformerService {
                   knownCredentials.add(userKey)
                 }
                 
-              case Left(e) => 
-                println(s"[WARN] Skipping malformed credential record: ${e.getMessage.take(100)}")
+                case Left(e) => 
+                  println(s"[WARN] Skipping malformed credential record: ${e.getMessage.take(100)}")
+              }
+            } catch {
+              case e: Exception => 
+                println(s"[WARN] Error processing credential record: ${e.getMessage}")
             }
-          } catch {
-            case e: Exception => 
-              println(s"[WARN] Error processing credential record: ${e.getMessage}")
           }
         }
         
