@@ -199,7 +199,7 @@ object ComplianceNotificationRouterService {
   
   // Pure function: generates deduplication key for a user and status
   def dedupKey(userId: String, status: String): String = {
-    s"notification:${userId}:${status}"
+    s"notification:last:${userId}:${status}"
   }
   
   // Pure function: gets priority for a status from config, defaults to MEDIUM
@@ -207,6 +207,73 @@ object ComplianceNotificationRouterService {
     config.issueTypes.get(status)
       .map(_.priority)
       .getOrElse("MEDIUM")
+  }
+  
+  // Pure function: evaluates a frequency condition against days until expiry
+  def evaluateCondition(condition: String, daysUntilExpiry: Option[Long]): Boolean = {
+    condition match {
+      case "always" => true
+      case c if c.startsWith("days_until_expiry") =>
+        daysUntilExpiry match {
+          case Some(days) =>
+            if (c.contains("<=")) {
+              val threshold = c.split("<=").last.trim.toInt
+              days <= threshold
+            } else if (c.contains("<")) {
+              val threshold = c.split("<").last.trim.toInt
+              days < threshold
+            } else if (c.contains(">=")) {
+              val threshold = c.split(">=").last.trim.toInt
+              days >= threshold
+            } else if (c.contains(">")) {
+              val threshold = c.split(">").last.trim.toInt
+              days > threshold
+            } else {
+              false
+            }
+          case None => false  // Can't evaluate without days
+        }
+      case _ => false
+    }
+  }
+  
+  // Pure function: finds the matching frequency rule and returns interval in seconds
+  def getNotificationIntervalSeconds(
+    daysUntilExpiry: Option[Long],
+    frequencyRules: Seq[FrequencyRule],
+    defaultIntervalHours: Int = 24
+  ): Int = {
+    frequencyRules
+      .find(rule => evaluateCondition(rule.condition, daysUntilExpiry))
+      .map(_.intervalHours * 3600)
+      .getOrElse(defaultIntervalHours * 3600)
+  }
+  
+  // Function to check if enough time has passed since last notification
+  def shouldSendNotification(
+    jedis: Jedis,
+    userId: String,
+    status: String,
+    daysUntilExpiry: Option[Long],
+    frequencyRules: Seq[FrequencyRule]
+  ): Boolean = {
+    val key = dedupKey(userId, status)
+    val lastSentStr = jedis.get(key)
+    
+    if (lastSentStr == null) {
+      true  // Never sent, should send
+    } else {
+      val lastSent = Instant.parse(lastSentStr)
+      val intervalSeconds = getNotificationIntervalSeconds(daysUntilExpiry, frequencyRules)
+      val nextAllowedTime = lastSent.plusSeconds(intervalSeconds)
+      Instant.now().isAfter(nextAllowedTime)
+    }
+  }
+  
+  // Update the dedup storage to store timestamp instead of just "sent"
+  def markNotificationSent(jedis: Jedis, userId: String, status: String, ttlSeconds: Int): Unit = {
+    val key = dedupKey(userId, status)
+    jedis.setex(key, ttlSeconds, Instant.now().toString)
   }
   
   // Pure function: creates a notification command from compliance data and config
@@ -305,11 +372,16 @@ object ComplianceNotificationRouterService {
             case Right(compliance) =>
               // Only process non-compliant statuses
               if (shouldNotify(compliance.compliance_status)) {
-                // Check if we've already notified for this user/status in the last 24 hours
-                val key = dedupKey(compliance.userId, compliance.compliance_status)
-                val alreadyNotified = jedis.exists(key)
+                // Check if enough time has passed since last notification based on frequency rules
+                val shouldSend = shouldSendNotification(
+                  jedis,
+                  compliance.userId,
+                  compliance.compliance_status,
+                  compliance.daysUntilExpiry,
+                  config.frequencyRules
+                )
                 
-                if (!alreadyNotified) {
+                if (shouldSend) {
                   // Create notification command
                   val notificationId = java.util.UUID.randomUUID().toString
                   val notificationCommand = createNotificationCommand(
@@ -327,10 +399,16 @@ object ComplianceNotificationRouterService {
                       notificationCommand.asJson.noSpaces
                     )).get() // Block until send completes
                     
-                    // Mark as notified in Redis (configurable TTL)
-                    jedis.setex(key, config.settings.dedupTtlHours * 3600, "sent")
+                    // Store with a long TTL (we check timestamps, not just existence)
+                    markNotificationSent(jedis, compliance.userId, compliance.compliance_status, 86400 * 30)  // 30 days
                     
-                    println(s"[INFO] Created notification: $notificationId")
+                    // Log which frequency rule matched
+                    val matchedRule = config.frequencyRules
+                      .find(rule => evaluateCondition(rule.condition, compliance.daysUntilExpiry))
+                      .map(_.name)
+                      .getOrElse("default")
+                    
+                    println(s"[INFO] Created notification: $notificationId (frequency rule: $matchedRule)")
                     println(s"      User: ${notificationCommand.userName} (${compliance.userId})")
                     println(s"      Issue: ${compliance.compliance_status} (priority: ${notificationCommand.priority})")
                     println(s"      To: ${notificationCommand.to.mkString(", ")}")
@@ -341,7 +419,8 @@ object ComplianceNotificationRouterService {
                       e.printStackTrace()
                   }
                 } else {
-                  println(s"[DEBUG] Skipping duplicate notification for ${compliance.userId}:${compliance.compliance_status}")
+                  val intervalHours = getNotificationIntervalSeconds(compliance.daysUntilExpiry, config.frequencyRules) / 3600
+                  println(s"[DEBUG] Skipping notification for ${compliance.userId}:${compliance.compliance_status} - next allowed in $intervalHours hours")
                 }
               } else {
                 println(s"[DEBUG] Skipping COMPLIANT status for ${compliance.userId}")

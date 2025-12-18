@@ -261,7 +261,7 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     val key2 = ComplianceNotificationRouterService.dedupKey("user123", "EXPIRED")
     
     key1 should be(key2)
-    key1 should be("notification:user123:EXPIRED")
+    key1 should be("notification:last:user123:EXPIRED")
   }
   
   it should "generate different dedup key for different status" in {
@@ -269,8 +269,8 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     val key2 = ComplianceNotificationRouterService.dedupKey("user123", "EXPIRING")
     
     key1 should not be(key2)
-    key1 should be("notification:user123:EXPIRED")
-    key2 should be("notification:user123:EXPIRING")
+    key1 should be("notification:last:user123:EXPIRED")
+    key2 should be("notification:last:user123:EXPIRING")
   }
   
   it should "generate different dedup key for different users" in {
@@ -278,8 +278,8 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     val key2 = ComplianceNotificationRouterService.dedupKey("user456", "EXPIRED")
     
     key1 should not be(key2)
-    key1 should be("notification:user123:EXPIRED")
-    key2 should be("notification:user456:EXPIRED")
+    key1 should be("notification:last:user123:EXPIRED")
+    key2 should be("notification:last:user456:EXPIRED")
   }
   
   // ========== Additional Edge Case Tests ==========
@@ -343,6 +343,64 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     )
     
     command.userName should be("Jane Smith")
+  }
+  
+  // ========== Frequency Rule Tests ==========
+  
+  "evaluateCondition" should "return true for 'always' condition" in {
+    ComplianceNotificationRouterService.evaluateCondition("always", Some(30)) should be(true)
+    ComplianceNotificationRouterService.evaluateCondition("always", None) should be(true)
+  }
+  
+  it should "evaluate 'days_until_expiry < X' correctly" in {
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry < 0", Some(-5)) should be(true)
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry < 0", Some(0)) should be(false)
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry < 0", Some(5)) should be(false)
+  }
+  
+  it should "evaluate 'days_until_expiry <= X' correctly" in {
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry <= 7", Some(5)) should be(true)
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry <= 7", Some(7)) should be(true)
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry <= 7", Some(8)) should be(false)
+  }
+  
+  it should "return false for None daysUntilExpiry on day-based conditions" in {
+    ComplianceNotificationRouterService.evaluateCondition("days_until_expiry <= 7", None) should be(false)
+  }
+  
+  "getNotificationIntervalSeconds" should "return matching rule interval" in {
+    val rules = Seq(
+      FrequencyRule("Expired", "days_until_expiry < 0", 24),
+      FrequencyRule("Critical", "days_until_expiry <= 7", 24),
+      FrequencyRule("Urgent", "days_until_expiry <= 14", 72),
+      FrequencyRule("Default", "always", 168)
+    )
+    
+    // Expired: -5 days -> 24 hours
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(Some(-5), rules) should be(24 * 3600)
+    
+    // Critical: 5 days -> 24 hours  
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(Some(5), rules) should be(24 * 3600)
+    
+    // Urgent: 10 days -> 72 hours
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(Some(10), rules) should be(72 * 3600)
+    
+    // Default: 30 days -> 168 hours
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(Some(30), rules) should be(168 * 3600)
+  }
+  
+  it should "return default interval when no rules match" in {
+    val rules = Seq.empty[FrequencyRule]
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(Some(30), rules) should be(24 * 3600)
+  }
+  
+  it should "return default interval for None daysUntilExpiry with day-based rules" in {
+    val rules = Seq(
+      FrequencyRule("Critical", "days_until_expiry <= 7", 24),
+      FrequencyRule("Default", "always", 168)
+    )
+    // None days -> falls through to "always" rule
+    ComplianceNotificationRouterService.getNotificationIntervalSeconds(None, rules) should be(168 * 3600)
   }
 }
 

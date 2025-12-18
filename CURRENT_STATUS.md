@@ -52,6 +52,15 @@
   - Added volume mount for config file in docker-compose
   - Configuration now editable without rebuilding containers
   - All tests passing (25 tests in compliance-notification-router)
+- Phase 4: Frequency-based notification scheduling - complete
+  - Implemented frequency rule evaluation based on days until expiry
+  - Added evaluateCondition function to parse and evaluate frequency conditions
+  - Added getNotificationIntervalSeconds to determine notification intervals
+  - Updated dedup logic to use timestamps instead of simple existence checks
+  - Added shouldSendNotification to check if enough time has passed since last notification
+  - Updated main loop to use frequency-based scheduling instead of simple 24-hour dedup
+  - Notifications now sent more frequently for urgent cases (expired/critical) and less frequently for early warnings
+  - Added comprehensive tests for frequency rule evaluation (32 tests passing)
 
 ## Next Up
 
