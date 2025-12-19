@@ -236,6 +236,18 @@ services:
     networks:
       - kafka-network
 
+  pushgateway:
+    image: prom/pushgateway:v1.8.0
+    container_name: pushgateway
+    ports:
+      - "9091:9091"  # Direct port access for metrics
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pushgateway.rule=Host(`pushgateway.localhost`)"
+      - "traefik.http.services.pushgateway.loadbalancer.server.port=9091"
+    networks:
+      - kafka-network
+
 volumes:
   postgres_data:
   kafka_data:

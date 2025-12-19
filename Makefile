@@ -37,7 +37,7 @@ TOPICS = \
 	manager-digest-service-build manager-digest-service-up manager-digest-service-down manager-digest-service-restart manager-digest-service-logs manager-digest-service-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-all rebuild-all \
-	test-all test-integration validate test-reset test-seed test-verify test-full test-watch \
+	test-all test-integration validate test-reset test-seed test-verify test-full test-watch test-with-metrics \
 	test-e2e test-e2e-up test-e2e-down test-e2e-logs \
 	ci-test ci-build \
 	status health logs watch \
@@ -88,6 +88,7 @@ help:
 	@echo "🧪 Testing Infrastructure:"
 	@echo "  make test-all        - Run all unit tests for all services"
 	@echo "  make test-integration - Run integration tests (requires Docker)"
+	@echo "  make test-with-metrics - Run all tests and push metrics to Prometheus"
 	@echo "  make validate        - Validate pipeline health (message counts, service status, lag)"
 	@echo "  make test-reset      - Complete pipeline reset (stop services, clear topics, clear Redis)"
 	@echo "  make test-seed       - Seed consistent test data"
@@ -427,6 +428,10 @@ test-all:
 	@cd services/compliance-notification-router && sbt test
 	@cd services/notification-service && sbt test
 	@echo "✓ All tests passed"
+
+test-with-metrics:
+	@echo "🧪 Running tests with metrics collection..."
+	@./scripts/run-tests-with-metrics.sh
 
 test-reset:
 	@echo "🔄 Running pipeline reset..."
