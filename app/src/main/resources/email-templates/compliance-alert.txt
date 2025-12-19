@@ -1,20 +1,25 @@
 TO: {{recipient_email}}
-SUBJECT: Compliance Alert: {{issue_type}}
+SUBJECT: WWCC Compliance Action Required - {{issue_type}}
 
-COMPLIANCE ALERT
+WWCC COMPLIANCE NOTIFICATION
 
-Issue Type: {{issue_type}}
-Severity: {{severity}}
-Detected: {{detected_at}}
+Dear {{user_name}},
 
-Description:
-{{description}}
+This is an automated notification regarding your Working With Children Check (WWCC) status.
 
-Affected Entity: {{affected_entity_type}} #{{affected_entity_id}}
+Status: {{issue_type}}
+Priority: {{priority}}
 
-Action Required:
-Please review and address this compliance issue as soon as possible.
+WWCC Details:
+  Number: {{wwcc_number}}
+  Expiry Date: {{expiry_date}}
+  Days Until Expiry: {{days_until_expiry}}
+
+Please take appropriate action to ensure your WWCC compliance is maintained.
+
+If you have any questions about this notification or need assistance with your WWCC renewal, please contact:
+  • Sarah Gurciullo - People & Culture
+  • Jordan Rothwell - Governance & Risk
 
 ---
-This is an automated alert from the Kafka Demo Compliance System.
-For questions, contact: jordanr@murrumbidgee.nsw.gov.au
+This is an automated message from Murrumbidgee Council's compliance monitoring system.

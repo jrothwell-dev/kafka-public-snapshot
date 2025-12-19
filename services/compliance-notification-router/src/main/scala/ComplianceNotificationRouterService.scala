@@ -180,10 +180,10 @@ object ComplianceNotificationRouterService {
       settings = NotificationSettings(dedupTtlHours = 24, overrideRecipient = None),
       ccRecipients = Seq.empty,
       issueTypes = Map(
-        "EXPIRED" -> IssueTypeConfig("HIGH", "individual-alert.html"),
-        "EXPIRING" -> IssueTypeConfig("MEDIUM", "individual-alert.html"),
-        "MISSING" -> IssueTypeConfig("HIGH", "individual-alert.html"),
-        "NOT_APPROVED" -> IssueTypeConfig("MEDIUM", "individual-alert.html")
+        "EXPIRED" -> IssueTypeConfig("HIGH", "wwcc-individual-alert.html"),
+        "EXPIRING" -> IssueTypeConfig("MEDIUM", "wwcc-individual-alert.html"),
+        "MISSING" -> IssueTypeConfig("HIGH", "wwcc-individual-alert.html"),
+        "NOT_APPROVED" -> IssueTypeConfig("MEDIUM", "wwcc-individual-alert.html")
       ),
       frequencyRules = Seq.empty,
       departmentManagers = Map.empty,
@@ -194,7 +194,11 @@ object ComplianceNotificationRouterService {
   
   // Pure function: determines if a notification should be sent for a given status
   def shouldNotify(status: String): Boolean = {
-    status != "COMPLIANT"
+    // UNEXPECTED excluded - will be handled in weekly digest only
+    status match {
+      case "EXPIRED" | "EXPIRING" | "MISSING" | "NOT_APPROVED" => true
+      case _ => false
+    }
   }
   
   // Pure function: generates deduplication key for a user and status
@@ -285,7 +289,7 @@ object ComplianceNotificationRouterService {
   ): NotificationCommand = {
     val userName = s"${compliance.firstName} ${compliance.lastName}"
     val issueConfig = config.issueTypes.getOrElse(compliance.compliance_status, 
-      IssueTypeConfig("MEDIUM", "individual-alert.html"))
+      IssueTypeConfig("MEDIUM", "wwcc-individual-alert.html"))
     
     // Determine recipients
     val toRecipients = config.settings.overrideRecipient match {

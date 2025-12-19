@@ -41,7 +41,7 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
   def createTestConfig(
     overrideRecipient: Option[String] = Some("test@example.com"),
     ccRecipients: Seq[String] = Seq.empty,
-    template: String = "individual-alert.html"
+    template: String = "wwcc-individual-alert.html"
   ): NotificationConfig = {
     NotificationConfig(
       settings = NotificationSettings(
@@ -105,6 +105,10 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     ComplianceNotificationRouterService.shouldNotify("COMPLIANT") should be(false)
   }
   
+  it should "return false for UNEXPECTED status" in {
+    ComplianceNotificationRouterService.shouldNotify("UNEXPECTED") should be(false)
+  }
+  
   "createNotificationCommand" should "create notification for EXPIRED status" in {
     val compliance = createCompliance(complianceStatus = "EXPIRED")
     val config = createTestConfig()
@@ -125,7 +129,7 @@ class NotificationRouterSpec extends AnyFlatSpec with Matchers {
     command.subject should include("WWCC Compliance Alert: EXPIRED")
     command.subject should include("John Doe")
     command.isHtml should be(true)
-    command.template should be("individual-alert.html")
+    command.template should be("wwcc-individual-alert.html")
     command.data.wwccNumber should be(compliance.wwccNumber)
     command.data.expiryDate should be(compliance.expiryDate)
     command.data.daysUntilExpiry should be(compliance.daysUntilExpiry)

@@ -28,6 +28,21 @@
   - Replaced simple 3-second sleep with proper wait loop that checks if topics are actually deleted
   - Waits up to 30 seconds, checking every 2 seconds for remaining topics
   - Prevents "already exists" errors when recreating topics
+- [x] Test visibility dashboard with Prometheus Pushgateway
+  - Added Prometheus Pushgateway service to docker-compose.yml (port 9091)
+  - Updated prometheus.yml to scrape Pushgateway metrics
+  - Created scripts/run-tests-with-metrics.sh that:
+    - Runs sbt test for each service (safetyculture-poller, wwcc-transformer, compliance-notification-router, notification-service, manager-digest-service)
+    - Parses test output for pass/fail counts and duration
+    - Pushes metrics to Pushgateway using curl (graceful fallback if Pushgateway unavailable)
+    - Tracks: wwcc_tests_total{service,status}, wwcc_tests_duration_seconds{service}, wwcc_tests_last_run_timestamp{service}
+  - Created Grafana dashboard at config/grafana/dashboards/test-results.json showing:
+    - Total tests passed/failed
+    - Test counts over time per service
+    - Test duration trends
+    - Per-service test status panels
+    - Test status table with last run timestamps
+  - Added make test-with-metrics target to run tests with metrics collection
 
 ## In Progress
 
@@ -75,6 +90,15 @@
   - Added Makefile targets following existing patterns
   - Unit tests: 33 tests passing (day/time parsing, isDigestTime logic, aggregateByDepartment, template data building)
   - Service scaffold complete with build.sbt, Dockerfile, and project structure
+- [x] Email templates and notification routing updates - complete
+  - Updated email templates to remove HR terminology and add council-appropriate contact details
+  - Created new wwcc-individual-alert.html template with professional design, inclusive language for diverse recipients (councillors, daycare staff, PMCs)
+  - Updated compliance-alert.txt plain text template with new content and contact details
+  - Updated notification routing to exclude UNEXPECTED status from immediate notifications (will be handled in weekly digest only)
+  - Updated shouldNotify function to explicitly match only EXPIRED, EXPIRING, MISSING, NOT_APPROVED statuses
+  - Updated notification-settings.yaml to use wwcc-individual-alert.html template
+  - Added test for UNEXPECTED status exclusion
+  - All tests passing (33 tests in compliance-notification-router)
 
 ## Next Up
 

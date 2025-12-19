@@ -20,16 +20,16 @@ cc_recipients:
 issue_types:
   EXPIRED:
     priority: HIGH
-    template: individual-alert.html
+    template: wwcc-individual-alert.html
   EXPIRING:
     priority: MEDIUM
-    template: individual-alert.html
+    template: wwcc-individual-alert.html
   MISSING:
     priority: HIGH
-    template: individual-alert.html
+    template: wwcc-individual-alert.html
   NOT_APPROVED:
     priority: MEDIUM
-    template: individual-alert.html
+    template: wwcc-individual-alert.html
 
 # Notification frequency based on days until expiry
 # First matching rule wins (evaluated top to bottom)
