@@ -61,6 +61,20 @@
   - Updated main loop to use frequency-based scheduling instead of simple 24-hour dedup
   - Notifications now sent more frequently for urgent cases (expired/critical) and less frequently for early warnings
   - Added comprehensive tests for frequency rule evaluation (32 tests passing)
+- [x] manager-digest-service - complete
+  - New service for weekly digest emails to department managers
+  - Consumes from processed.wwcc.status to track latest compliance state per user
+  - Maintains in-memory map of latest compliance per userId
+  - Checks every 30 seconds if current time matches scheduled digest time (with 5-min window)
+  - Only sends once per day (tracks last sent date)
+  - Aggregates issues by department, sends one email per department manager
+  - Publishes to commands.notifications with issueType: "DIGEST"
+  - Uses override recipient from config during development
+  - Created manager-digest.html email template showing department summary with issue table
+  - Added service to docker-compose.services.yml
+  - Added Makefile targets following existing patterns
+  - Unit tests: 33 tests passing (day/time parsing, isDigestTime logic, aggregateByDepartment, template data building)
+  - Service scaffold complete with build.sbt, Dockerfile, and project structure
 
 ## Next Up
 

@@ -7,7 +7,7 @@ endif
 export DOCKER_BUILDKIT=1
 
 # Service names
-SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router notification-service
+SERVICES = safetyculture-poller wwcc-transformer compliance-notification-router notification-service manager-digest-service
 COMPOSE_FILE = docker-compose.yml
 SERVICES_FILE = docker-compose.services.yml
 TEST_COMPOSE_FILE = docker-compose.test.yml
@@ -34,6 +34,7 @@ TOPICS = \
 	wwcc-transformer-build wwcc-transformer-up wwcc-transformer-down wwcc-transformer-restart wwcc-transformer-logs wwcc-transformer-rebuild \
 	compliance-notification-router-build compliance-notification-router-up compliance-notification-router-down compliance-notification-router-restart compliance-notification-router-logs compliance-notification-router-rebuild \
 	notification-service-build notification-service-up notification-service-down notification-service-restart notification-service-logs notification-service-rebuild \
+	manager-digest-service-build manager-digest-service-up manager-digest-service-down manager-digest-service-restart manager-digest-service-logs manager-digest-service-rebuild \
 	topics clear-topics list-topics cleanup-old-topics \
 	seed seed-all rebuild-all \
 	test-all test-integration validate test-reset test-seed test-verify test-full test-watch \
@@ -269,6 +270,27 @@ notification-service-logs:
 	@docker-compose -f $(SERVICES_FILE) logs -f notification-service
 
 notification-service-rebuild: notification-service-build notification-service-up
+
+# manager-digest-service
+manager-digest-service-build:
+	@echo "🔨 Building manager-digest-service..."
+	@docker-compose -f $(SERVICES_FILE) build manager-digest-service
+	@echo "✅ manager-digest-service built"
+
+manager-digest-service-up:
+	@echo "🚀 Starting manager-digest-service..."
+	@docker-compose -f $(SERVICES_FILE) up -d manager-digest-service
+	@echo "✅ manager-digest-service started"
+
+manager-digest-service-down:
+	@docker-compose -f $(SERVICES_FILE) stop manager-digest-service
+
+manager-digest-service-restart: manager-digest-service-down manager-digest-service-up
+
+manager-digest-service-logs:
+	@docker-compose -f $(SERVICES_FILE) logs -f manager-digest-service
+
+manager-digest-service-rebuild: manager-digest-service-build manager-digest-service-up
 
 # ============================================================================
 # Kafka Topics

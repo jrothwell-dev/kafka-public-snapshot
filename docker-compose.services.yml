@@ -66,6 +66,21 @@ services:
     depends_on:
       - compliance-notification-router
 
+  manager-digest-service:
+    build:
+      context: ./services/manager-digest-service
+      dockerfile: Dockerfile
+    container_name: manager-digest-service
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    volumes:
+      - ./config/notification-settings.yaml:/app/config/notification-settings.yaml:ro
+    networks:
+      - default
+    restart: unless-stopped
+    depends_on:
+      - wwcc-transformer
+
 networks:
   default:
     name: council-kafka-platform_kafka-network
