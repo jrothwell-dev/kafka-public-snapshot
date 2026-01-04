@@ -1,50 +1,33 @@
 {
   "requiredUsers": [
-    {
-      "email": "jordanr@murrumbidgee.nsw.gov.au",
-      "firstName": "Jordan",
-      "lastName": "Rothwell",
-      "department": "IT Services",
-      "position": "Systems Administrator",
-      "requiresWwcc": true,
-      "startDate": "2024-01-15"
-    },
-    {
-      "email": "zackw@murrumbidgee.nsw.gov.au",
-      "firstName": "Zack",
-      "lastName": "Walsh",
-      "department": "Community Services",
-      "position": "Youth Worker",
-      "requiresWwcc": true,
-      "startDate": "2024-03-01"
-    },
-    {
-      "email": "emmab@murrumbidgee.nsw.gov.au",
-      "firstName": "Emma",
-      "lastName": "Bryce",
-      "department": "Youth Programs",
-      "position": "Program Coordinator",
-      "requiresWwcc": true,
-      "startDate": "2024-06-01"
-    },
-    {
-      "email": "stephenl@murrumbidgee.nsw.gov.au",
-      "firstName": "Stephen",
-      "lastName": "Lockhart",
-      "department": "Recreation",
-      "position": "Sports Coordinator",
-      "requiresWwcc": true,
-      "startDate": "2024-02-10"
-    },
-    {
-      "email": "steveg@murrumbidgee.nsw.gov.au",
-      "firstName": "Steve",
-      "lastName": "Goodsall",
-      "department": "Education",
-      "position": "Education Officer",
-      "requiresWwcc": true,
-      "startDate": "2024-04-20"
-    }
-  ],
-  "timestamp": "2024-12-19T10:00:00Z"
+    {"email": "bellag@murrumbidgee.nsw.gov.au", "firstName": "Bella", "lastName": "Gordon", "requiredBecause": "JELC"},
+    {"email": "brookep@murrumbidgee.nsw.gov.au", "firstName": "Brooke", "lastName": "Pitt", "requiredBecause": "JELC"},
+    {"email": "christinec@murrumbidgee.nsw.gov.au", "firstName": "Christine", "lastName": "Chirgwin", "requiredBecause": "PMC"},
+    {"email": "colleenk@murrumbidgee.nsw.gov.au", "firstName": "Colleen", "lastName": "Kelly", "requiredBecause": "JELC"},
+    {"email": "edenh@murrumbidgee.nsw.gov.au", "firstName": "Eden", "lastName": "Hercus", "requiredBecause": "MISC"},
+    {"email": "elishac@murrumbidgee.nsw.gov.au", "firstName": "Elisha", "lastName": "Conn", "requiredBecause": "JELC"},
+    {"email": "faithb@murrumbidgee.nsw.gov.au", "firstName": "Faith", "lastName": "Bryce", "requiredBecause": "PMC"},
+    {"email": "garrys@murrumbidgee.nsw.gov.au", "firstName": "Garry", "lastName": "Stoll", "requiredBecause": "PMC"},
+    {"email": "gracep@murrumbidgee.nsw.gov.au", "firstName": "Grace", "lastName": "Peisley", "requiredBecause": "JELC"},
+    {"email": "hayleyh@murrumbidgee.nsw.gov.au", "firstName": "Hayley", "lastName": "Heath", "requiredBecause": "PMC"},
+    {"email": "isabellad@murrumbidgee.nsw.gov.au", "firstName": "Isabella", "lastName": "Dunkinson", "requiredBecause": "Library"},
+    {"email": "jessv@murrumbidgee.nsw.gov.au", "firstName": "Jess", "lastName": "Vischer", "requiredBecause": "JELC"},
+    {"email": "johns@murrumbidgee.nsw.gov.au", "firstName": "John", "lastName": "Scarce", "requiredBecause": "PMC"},
+    {"email": "jordanr@murrumbidgee.nsw.gov.au", "firstName": "Jordan", "lastName": "Rothwell", "requiredBecause": "MISC"},
+    {"email": "judiths@murrumbidgee.nsw.gov.au", "firstName": "Judith", "lastName": "Saxvik", "requiredBecause": "PMC"},
+    {"email": "kaitlins@murrumbidgee.nsw.gov.au", "firstName": "Kaitlin", "lastName": "Salzke", "requiredBecause": "PMC"},
+    {"email": "karlys@murrumbidgee.nsw.gov.au", "firstName": "Karly", "lastName": "Sleigh", "requiredBecause": "JELC"},
+    {"email": "laurah@murrumbidgee.nsw.gov.au", "firstName": "Laura", "lastName": "Ham", "requiredBecause": "JELC"},
+    {"email": "laurenh@murrumbidgee.nsw.gov.au", "firstName": "Lauren", "lastName": "Hall", "requiredBecause": "Pending"},
+    {"email": "louiseh@murrumbidgee.nsw.gov.au", "firstName": "Louise", "lastName": "Hart", "requiredBecause": "JELC"},
+    {"email": "rebeccab@murrumbidgee.nsw.gov.au", "firstName": "Rebecca", "lastName": "Best", "requiredBecause": "Pending"},
+    {"email": "robertb@murrumbidgee.nsw.gov.au", "firstName": "Robert", "lastName": "Black", "requiredBecause": "PMC"},
+    {"email": "robertc@murrumbidgee.nsw.gov.au", "firstName": "Robert", "lastName": "Curphey", "requiredBecause": "PMC"},
+    {"email": "ruthm@murrumbidgee.nsw.gov.au", "firstName": "Ruth", "lastName": "McRae", "requiredBecause": "PMC"},
+    {"email": "sarahg@murrumbidgee.nsw.gov.au", "firstName": "Sarah", "lastName": "Gurciullo", "requiredBecause": "CCTV"},
+    {"email": "siennar@murrumbidgee.nsw.gov.au", "firstName": "Sienna", "lastName": "Reid", "requiredBecause": "JELC"},
+    {"email": "tims@murrumbidgee.nsw.gov.au", "firstName": "Tim", "lastName": "Strachan", "requiredBecause": "PMC"},
+    {"email": "tonip@murrumbidgee.nsw.gov.au", "firstName": "Toni", "lastName": "Pisasale", "requiredBecause": "PMC"},
+    {"email": "troym@murrumbidgee.nsw.gov.au", "firstName": "Troy", "lastName": "Mauger", "requiredBecause": "PMC"}
+  ]
 }

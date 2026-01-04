@@ -99,6 +99,10 @@
   - Updated notification-settings.yaml to use wwcc-individual-alert.html template
   - Added test for UNEXPECTED status exclusion
   - All tests passing (33 tests in compliance-notification-router)
+- [x] Required users data and seed script updates - complete
+  - Updated required-users.json with 29 real staff members (renamed "department" field to "requiredBecause" to reflect that it indicates why WWCC is required, not actual department)
+  - Simplified seed-test-data.sh to only seed reference data (removed mock credential seeding step)
+  - Seed script now focuses on reference data only: required users and compliance rules
 
 ## Next Up
 
